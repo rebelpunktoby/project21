@@ -20,6 +20,13 @@
     <script src="./site.js" defer></script>
   </head>
   <body>
+    <!-- living background: two tint+glow layers, crossfaded; sits under everything -->
+    <div class="weather" id="weather" aria-hidden="true">
+      <div class="wx is-on"><i class="glow g1"></i><i class="glow g2"></i></div>
+      <div class="wx"><i class="glow g1"></i><i class="glow g2"></i></div>
+      <canvas class="dim" id="dim-canvas"></canvas>
+    </div>
+
     <a class="skip-link" href="#work">Skip to work <span lang="zh-Hant">跳至作品</span></a>
 
     <!-- ─────────────────────────────── header -->
@@ -72,6 +79,11 @@
 
         <div class="index" id="project-index"></div>
         <p class="index-empty" id="index-empty" hidden></p>
+      </section>
+
+      <!-- ─────────────────────────────── kaleidoscope — one loud beat, made of the work -->
+      <section class="kaleido" id="kaleido" aria-hidden="true">
+        <canvas id="kaleido-canvas"></canvas>
       </section>
 
       <!-- ─────────────────────────────── studio -->

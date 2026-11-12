@@ -424,7 +424,7 @@ $$(".read").forEach(block => {
  * 10. ORIENTATION — active nav link, progress rule
  * ------------------------------------------------------------------ */
 function initChapters() {
-  const sections = $$("main section[id]");
+  const sections = $$("main section[id]:not(.kaleido)");
   const links = $$("[data-chapter]");
   let current = "";
 
@@ -483,6 +483,7 @@ function initHero() {
   const project = slug => PROJECTS.find(p => p.slug === slug);
   const setCaption = slug => {
     const p = project(slug);
+    weather.set(slug);
     open.dataset.slug = slug;
     $(".hero-name", open).textContent = p.title;
     $(".hero-scope", open).innerHTML = `${esc(p.scope.en)} <span lang="zh-Hant">${esc(p.scope.zh)}</span>`;
@@ -553,6 +554,7 @@ function initPeek(scope) {
   if (prefersReduced() || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
   $$(".plate", scope).forEach(el => {
     el.addEventListener("pointerenter", () => {
+      setKaleidoSource(el.dataset.slug);
       if (el.dataset.peeked) return;
       el.dataset.peeked = "1";
       const p = PROJECTS.find(x => x.slug === el.dataset.slug);
@@ -567,6 +569,236 @@ function initPeek(scope) {
 }
 
 /* ------------------------------------------------------------------ *
+ * 10c. KALEIDOSCOPE — eight mirrored wedges of one cover plate.
+ * Source: the last project hovered or scrolled past (KOKOA to start),
+ * taken from the index thumbnail already in cache. Draws only while
+ * the band is on screen, and only on scroll; crossfades on a source
+ * change. Reduced motion gets one still frame.
+ * ------------------------------------------------------------------ */
+const kal = { slug: "kokoa", img: null, prev: null, fadeT0: 0, visible: false, raf: 0, progress: 0 };
+const KAL_N = 8, KAL_FADE = 700;
+
+/* rotation is a function of scroll position, shared by the background
+   and the band, so the band continues the turn the background began */
+const kalRot = () => scrollY * 0.0005;
+
+/* paint one kaleidoscope. scale: canvas pixels per CSS pixel (the
+   background uses ¼, which also softens it). lens: dark radial fall-off
+   (the band). Returns true while a source crossfade is still running. */
+function kaleidoPaint(cv, now, { scale, p, lens }) {
+  if (!cv || !kal.img) return false;
+  const ctx = cv.getContext("2d");
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const W = Math.max(1, Math.round(w * scale)), H = Math.max(1, Math.round(h * scale));
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const R = Math.hypot(w / 2, h / 2) + 2;
+  const a = (Math.PI * 2) / KAL_N;
+  const rot = kalRot();
+  const fade = kal.prev ? Math.min(1, (now - kal.fadeT0) / KAL_FADE) : 1;
+
+  const wedges = (img, alpha) => {
+    /* the plate sits mid-wedge, logo over the wedge's centre line, and
+       slides outward along the wedge as the band crosses the viewport */
+    const S = R * 1.15, Sh = S * img.naturalHeight / img.naturalWidth;
+    const cx = R * (.38 + p * .34), cy = (p - .5) * Sh * .12;
+    const eps = .012;                                          /* overlap: no hairline seams */
+    ctx.globalAlpha = alpha;
+    for (let i = 0; i < KAL_N; i++) {
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(rot);
+      if (i % 2) { ctx.rotate((i + 1) * a); ctx.scale(1, -1); } else { ctx.rotate(i * a); }
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, -eps, a + eps); ctx.closePath(); ctx.clip();
+      ctx.translate(cx, cy); ctx.rotate(a / 2);
+      ctx.drawImage(img, -S * .5, -Sh * .5, S, Sh);
+      ctx.restore();
+    }
+  };
+  if (kal.prev && fade < 1) wedges(kal.prev, 1);
+  wedges(kal.img, fade);
+  ctx.globalAlpha = 1;
+  if (lens) {
+    /* soft fall-off into the dark band at the edges */
+    const g = ctx.createRadialGradient(w / 2, h / 2, R * .42, w / 2, h / 2, R * .98);
+    g.addColorStop(0, "rgba(27,27,23,0)"); g.addColorStop(1, "rgba(27,27,23,.96)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  }
+  return fade < 1;
+}
+
+/* the band */
+function kaleidoDraw(now) {
+  const more = kaleidoPaint($("#kaleido-canvas"), now, { scale: Math.min(devicePixelRatio || 1, 2), p: kal.progress, lens: true });
+  if (more) kal.raf = requestAnimationFrame(kaleidoDraw);
+  else { kal.raf = 0; dimSettle(); }
+}
+
+/* the background — the focused project's dimension behind Work */
+const dim = { visible: false, raf: 0 };
+function dimDraw(now) {
+  const p = .5 + Math.sin(scrollY * 0.0004) * .3;          /* the sampled region breathes with scroll */
+  const more = kaleidoPaint($("#dim-canvas"), now, { scale: .25, p, lens: false });
+  if (more) dim.raf = requestAnimationFrame(dimDraw);
+  else { dim.raf = 0; dimSettle(); }
+}
+function dimSchedule() {
+  if (!dim.visible || dim.raf) return;
+  dim.raf = requestAnimationFrame(t => { dim.raf = 0; dimDraw(t); });
+}
+/* a crossfade is finished once neither canvas needs the old image */
+function dimSettle() { if (!kal.raf && !dim.raf) kal.prev = null; }
+
+function kaleidoSchedule() {
+  if (!kal.visible || kal.raf) return;
+  kal.raf = requestAnimationFrame(t => { kal.raf = 0; kaleidoDraw(t); });
+}
+
+function setKaleidoSource(slug) {
+  if (slug === kal.slug) return;
+  kal.slug = slug;
+  const img = new Image();
+  img.decoding = "async";
+  /* the inside image if the hover peek already loaded it, else the index thumb — both cached */
+  const peek = document.querySelector(`.plate[data-slug="${slug}"] .plate-peek.is-ready`);
+  img.src = peek ? peek.src : thumb(slug);
+  (img.decode ? img.decode() : Promise.resolve()).then(() => {
+    if (kal.slug !== slug) return;
+    if (kal.img && (kal.visible || dim.visible) && !prefersReduced()) { kal.prev = kal.img; kal.fadeT0 = performance.now(); }
+    kal.img = img;
+    if (kal.visible) { cancelAnimationFrame(kal.raf); kal.raf = 0; kaleidoSchedule(); }
+    if (dim.visible) { cancelAnimationFrame(dim.raf); dim.raf = 0; dimSchedule(); }
+  }, () => {});
+}
+
+function initKaleido() {
+  const band = $("#kaleido"); if (!band) return;
+  const first = new Image();
+  first.src = thumb(kal.slug);
+  const ready = first.decode ? first.decode() : Promise.resolve();
+  const update = () => {
+    const r = band.getBoundingClientRect();
+    kal.progress = Math.min(1, Math.max(0, (innerHeight - r.top) / (innerHeight + r.height)));
+    /* the band's own position decides; the observer below only gates work while it's off screen */
+    kal.visible = r.bottom > -innerHeight * .1 && r.top < innerHeight * 1.1;
+    kaleidoSchedule();
+  };
+  ready.then(() => {
+    kal.img = first;
+    if (prefersReduced() || !("IntersectionObserver" in window)) {
+      kal.visible = true; kal.progress = .5; kaleidoDraw(performance.now()); kal.visible = !prefersReduced();
+      return;
+    }
+    new IntersectionObserver(([e]) => {
+      kal.visible = e.isIntersecting;
+      if (kal.visible) {
+        update();
+        /* first paint synchronously, so the band is never blank on entry */
+        if (kal.raf) { cancelAnimationFrame(kal.raf); kal.raf = 0; }
+        kaleidoDraw(performance.now());
+      }
+    }, { rootMargin: "10% 0px" }).observe(band);
+    addEventListener("scroll", update, { passive: true });
+    addEventListener("resize", update, { passive: true });
+    update();
+  }, () => {});
+}
+
+/* ------------------------------------------------------------------ *
+ * 10e. DIMENSIONS — while Work is on screen, the plate nearest the
+ * middle of the viewport is in focus: it drives the background
+ * kaleidoscope, the thread and the tint; the other plates step back.
+ * Leaving Work, the background fades and the band takes the same
+ * source, so one dimension opens up fully. Off under reduced motion.
+ * ------------------------------------------------------------------ */
+function initDimensions() {
+  const work = $("#work"), cv = $("#dim-canvas"), wx = $("#weather");
+  if (!work || !cv || prefersReduced()) return;
+  let ticking = false, focused = null;
+  const update = () => {
+    ticking = false;
+    const r = work.getBoundingClientRect();
+    const inWork = r.top < innerHeight * .6 && r.bottom > innerHeight * .4;
+    if (inWork !== dim.visible) {
+      dim.visible = inWork;
+      cv.classList.toggle("is-on", inWork);
+      wx.classList.toggle("in-work", inWork);
+      grid.classList.toggle("has-focus", inWork);
+      if (!inWork && focused) { $$(".plate.is-focus", grid).forEach(el => el.classList.remove("is-focus")); focused = null; }
+    }
+    if (!inWork) return;
+    /* the row nearest the viewport middle is in focus (one plate per row on phones);
+       the first plate of that row is the dimension's source */
+    const mid = innerHeight / 2, plates = [...grid.children].filter(el => el.classList.contains("plate"));
+    let best = null, bd = Infinity;
+    const dist = plates.map(el => { const b = el.getBoundingClientRect(); return Math.abs((b.top + b.bottom) / 2 - mid); });
+    dist.forEach((d, i) => { if (d < bd) { bd = d; best = plates[i]; } });
+    if (best && best !== focused) {
+      focused = best;
+      plates.forEach((el, i) => el.classList.toggle("is-focus", dist[i] - bd < 24));
+      setKaleidoSource(best.dataset.slug);
+      weather.set(best.dataset.slug);
+      setThread(best.style.getPropertyValue("--accent"));
+    }
+    dimSchedule();
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  addEventListener("resize", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  update();
+  /* a filter re-render replaces the plates: re-evaluate */
+  new MutationObserver(() => { focused = null; update(); }).observe(grid, { childList: true });
+}
+
+/* ------------------------------------------------------------------ *
+ * 10d. LIVING BACKGROUND
+ * setWeather(slug) tints the paper with that project's accent and
+ * lights the glows in it and the next project's accent. The two .wx
+ * layers alternate: the incoming one gets the colours and fades in
+ * over the other (opacity only). The glows drift with scroll —
+ * transform only, one write per frame. Reduced motion: no drift, no
+ * crossfade (CSS turns the transition off).
+ * ------------------------------------------------------------------ */
+let weather = { set() {} };
+function initWeather() {
+  const layers = $$("#weather .wx");
+  if (layers.length < 2) return weather;
+  let on = 0, slug = null;
+  function set(s) {
+    if (!s || s === slug) return;
+    const i = PROJECTS.findIndex(x => x.slug === s); if (i < 0) return;
+    slug = s;
+    const next = PROJECTS[(i + 1) % PROJECTS.length];
+    /* tint: the accent's hue at paper's lightness (lightened 60%, then 10% into paper);
+       the body's own transition crossfades it — no extra layer */
+    document.body.style.backgroundColor =
+      `color-mix(in srgb, color-mix(in srgb, ${PROJECTS[i].accent} 40%, #fff) 10%, var(--paper))`;
+    const incoming = layers[1 - on];
+    incoming.style.setProperty("--wx", PROJECTS[i].accent);
+    incoming.style.setProperty("--wx2", next.accent);
+    layers[on].classList.remove("is-on");
+    incoming.classList.add("is-on");
+    on = 1 - on;
+  }
+  if (!prefersReduced()) {
+    /* bounded drift of the whole layer (one composited surface), so the
+       light moves with the scroll without ever running off the page */
+    let ticking = false;
+    const drift = () => {
+      ticking = false;
+      const y = scrollY;
+      const t = `translate3d(${(Math.sin(y * 0.0006) * 2.5).toFixed(2)}vw, ${(Math.sin(y * 0.0004 + 1) * 5 - 3).toFixed(2)}vh, 0)`;
+      layers.forEach(l => { l.style.transform = t; });
+    };
+    addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(drift); } }, { passive: true });
+    drift();
+  }
+  set(PROJECTS[0].slug);
+  return { set };
+}
+
+/* ------------------------------------------------------------------ *
  * 10b. ACCENT THREAD — the header rule borrows the accent of the
  * project nearest the middle of the viewport; nothing else does.
  * ------------------------------------------------------------------ */
@@ -577,12 +809,13 @@ function setThread(colour) {
   else root.style.removeProperty("--thread");
 }
 function observeThread(scope) {
-  if (!("IntersectionObserver" in window) || prefersReduced()) return;
+  /* also runs under reduced motion: the thread and tint then change without transition */
+  if (!("IntersectionObserver" in window)) return;
   if (!threadIO) {
     threadIO = new IntersectionObserver(entries => {
       const hit = entries.filter(e => e.isIntersecting)
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      if (hit) setThread(hit.target.style.getPropertyValue("--accent"));
+      if (hit) { setThread(hit.target.style.getPropertyValue("--accent")); setKaleidoSource(hit.target.dataset.slug); weather.set(hit.target.dataset.slug); }
     }, { rootMargin: "-40% 0px -40% 0px", threshold: 0 });
   } else {
     threadIO.disconnect();
@@ -639,5 +872,8 @@ initReveals();          /* observers first, so the index can register with them 
 renderFilters();
 renderIndex();
 initChapters();
+weather = initWeather();   /* before the hero, which sets the first colour */
 initHero();
+initDimensions();
+initKaleido();
 watchImages(document);
