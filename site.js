@@ -354,6 +354,7 @@ function fillDialog(p) {
 function showProject(p) {
   active = p;
   fillDialog(p);
+  caseDimSet(p);
   dBody.classList.toggle("wipe-x", PROJECTS.indexOf(p) % 2 === 1);
   document.body.classList.add("dialog-open");
   if (!dialog.open) dialog.showModal();
@@ -384,11 +385,43 @@ function openProject(slug, trigger) {
   });
 }
 
+/* ------------------------------------------------------------------ *
+ * CASE DIMENSION — opening a project steps into its kaleidoscope: the
+ * project's own cover, mirrored, very faint behind its pages, turning
+ * as the case scrolls. Drawn only on the dialog's scroll; cover comes
+ * from the index thumbnail already in cache. Off under reduced motion.
+ * ------------------------------------------------------------------ */
+const caseDim = { img: null, slug: null, raf: 0 };
+function caseDimDraw() {
+  caseDim.raf = 0;
+  if (!dialog.open || !caseDim.img) return;
+  const st = dialog.scrollTop, max = Math.max(1, dialog.scrollHeight - dialog.clientHeight);
+  kaleidoPaint($("#case-dim"), performance.now(), {
+    scale: .25, img: caseDim.img, lens: false,
+    p: .3 + (st / max) * .45, rot: st * 0.0006 + PROJECTS.findIndex(x => x.slug === caseDim.slug) * .4
+  });
+}
+function caseDimSchedule() { if (!caseDim.raf) caseDim.raf = requestAnimationFrame(caseDimDraw); }
+function caseDimSet(p) {
+  const cv = $("#case-dim");
+  if (!cv || prefersReduced()) return;
+  cv.classList.remove("is-on");
+  caseDim.slug = p.slug; caseDim.img = null;
+  const img = new Image(); img.decoding = "async"; img.src = thumb(p.slug);
+  (img.decode ? img.decode() : Promise.resolve()).then(() => {
+    if (caseDim.slug !== p.slug) return;
+    caseDim.img = img; caseDimDraw(); cv.classList.add("is-on");
+  }, () => {});
+}
+dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
+
 const closeProject = () => { if (dialog.open) dialog.close(); };
 
 /* single cleanup path — also catches Escape */
 dialog.addEventListener("close", () => {
   document.body.classList.remove("dialog-open");
+  const cd = $("#case-dim"); if (cd) cd.classList.remove("is-on");
+  caseDim.img = null; caseDim.slug = null;
   dBody.innerHTML = "";
   active = null;
   if (lastTrigger && document.contains(lastTrigger)) lastTrigger.focus();
@@ -585,8 +618,8 @@ const kalRot = () => scrollY * 0.0005;
 /* paint one kaleidoscope. scale: canvas pixels per CSS pixel (the
    background uses ¼, which also softens it). lens: dark radial fall-off
    (the band). Returns true while a source crossfade is still running. */
-function kaleidoPaint(cv, now, { scale, p, lens }) {
-  if (!cv || !kal.img) return false;
+function kaleidoPaint(cv, now, { scale, p, lens, img: only, rot: rotOverride }) {
+  if (!cv || !(only || kal.img)) return false;
   const ctx = cv.getContext("2d");
   const w = cv.clientWidth, h = cv.clientHeight;
   const W = Math.max(1, Math.round(w * scale)), H = Math.max(1, Math.round(h * scale));
@@ -596,8 +629,8 @@ function kaleidoPaint(cv, now, { scale, p, lens }) {
 
   const R = Math.hypot(w / 2, h / 2) + 2;
   const a = (Math.PI * 2) / KAL_N;
-  const rot = kalRot();
-  const fade = kal.prev ? Math.min(1, (now - kal.fadeT0) / KAL_FADE) : 1;
+  const rot = rotOverride ?? kalRot();
+  const fade = !only && kal.prev ? Math.min(1, (now - kal.fadeT0) / KAL_FADE) : 1;
 
   const wedges = (img, alpha) => {
     /* the plate sits mid-wedge, logo over the wedge's centre line, and
@@ -617,8 +650,8 @@ function kaleidoPaint(cv, now, { scale, p, lens }) {
       ctx.restore();
     }
   };
-  if (kal.prev && fade < 1) wedges(kal.prev, 1);
-  wedges(kal.img, fade);
+  if (only) wedges(only, 1);
+  else { if (kal.prev && fade < 1) wedges(kal.prev, 1); wedges(kal.img, fade); }
   ctx.globalAlpha = 1;
   if (lens) {
     /* soft fall-off into the dark band at the edges */

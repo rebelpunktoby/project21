@@ -508,7 +508,18 @@ body > footer .text-link { justify-self: end; }
   background: var(--paper); color: var(--ink);
 }
 .case::backdrop { background: rgba(19,19,16,.55); }
-.case-shell { min-height: 100%; padding-bottom: 0; }
+.case-shell { position: relative; z-index: 1; min-height: 100%; padding-bottom: 0; }
+/* the project's own dimension, behind its pages — sticky so it fills the
+   view while the case scrolls; quarter-resolution, very quiet */
+.case-dim {
+  position: sticky; top: 0; display: block;
+  width: 100%; height: 100vh; height: 100dvh; margin-bottom: -100vh; margin-bottom: -100dvh;
+  opacity: 0; transition: opacity .9s ease .25s; pointer-events: none;
+}
+.case-dim.is-on { opacity: .075; }
+/* paper veil under the case's text so it reads cleanly over the dimension */
+.case-intro, .case-cat { position: relative; }
+.case-head { background: linear-gradient(color-mix(in srgb, var(--paper) 88%, transparent), color-mix(in srgb, var(--paper) 88%, transparent)); }
 
 .case-bar {
   position: sticky; top: 0; z-index: 10;
@@ -764,7 +775,7 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .reveal, .rise, .rise.is-visible { opacity: 1; transform: none; animation: none; }
   .wx { transition: none; transform: none !important; will-change: auto; }
   body { transition: none; }
-  .dim, .dim.is-on { display: none; }
+  .dim, .dim.is-on, .case-dim { display: none; }
   .plate-frame, .plate-foot { opacity: 1 !important; transform: none !important; transition: none; }
   .hero-frame img.is-on { animation: none; }
   .hero-frame img.was-on { opacity: 0; }
