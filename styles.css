@@ -197,8 +197,9 @@ h3 [lang="zh-Hant"] { margin-top: .2rem; font-size: .78em; font-weight: 400; col
   fill: var(--muted); fill-opacity: .62;
 }
 .name-frame .nf-sep { fill-opacity: .35; }
-.name-frame .nf-name { transition: fill .8s ease, fill-opacity .8s ease; }
-.name-frame .nf-name.is-now { fill: var(--nf-accent, var(--seal)); fill-opacity: 1; }
+.name-frame.has-sheen text { fill: url(#nf-sheen); fill-opacity: 1; }
+.name-frame .nf-s0 { stop-color: var(--muted); stop-opacity: .62; }
+.name-frame .nf-s1 { stop-color: var(--nf-accent, var(--seal)); stop-opacity: 1; transition: stop-color 1.2s ease; }
 .hero > :not(.name-frame) { position: relative; z-index: 1; }
 
 .hero {

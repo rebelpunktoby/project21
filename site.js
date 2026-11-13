@@ -1110,9 +1110,17 @@ function initNameFrame() {
       out = ticker("nf-top", `M${x0},${y0} H${x1}`, cycle, +1, cycle / PHONE_PX_PER_S)
           + ticker("nf-bot", `M${x0},${y1} H${x1}`, cycle, -1, cycle / PHONE_PX_PER_S);
     }
-    svg.innerHTML = out;
+    /* sheen: a soft band of the current picture's colour sweeps across the rings now and
+       then — no single name is singled out. Gradient in hero coordinates, so both rings
+       catch the same light. Reduced motion: plain grey text, no sheen. */
+    const sheen = still ? "" : `<defs><linearGradient id="nf-sheen" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${w}" y2="${h}">
+      <stop offset=".3" class="nf-s0"/><stop offset=".5" class="nf-s1"/><stop offset=".7" class="nf-s0"/>
+      <animateTransform attributeName="gradientTransform" type="translate" from="${-w} ${-h}" to="${w} ${h}" dur="15s" begin="indefinite" repeatCount="indefinite"/>
+    </linearGradient></defs>`;
+    svg.classList.toggle("has-sheen", !still);
+    svg.innerHTML = sheen + out;
     /* animations inserted after load don't start on the document clock in Chrome: start them explicitly */
-    requestAnimationFrame(() => $$("animate", svg).forEach(a => { try { a.beginElement(); } catch (_) {} }));
+    requestAnimationFrame(() => $$("animate, animateTransform", svg).forEach(a => { try { a.beginElement(); } catch (_) {} }));
     if (current) mark(current);
   }
 
@@ -1129,7 +1137,6 @@ function initNameFrame() {
     current = slug;
     const p = PROJECTS.find(x => x.slug === slug);
     if (p) svg.style.setProperty("--nf-accent", p.accent);
-    $$(".nf-name", svg).forEach(t => t.classList.toggle("is-now", t.dataset.slug === slug));
   }
 
   build();
