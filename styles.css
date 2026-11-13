@@ -200,13 +200,13 @@ h3 [lang="zh-Hant"] { margin-top: .2rem; font-size: .78em; font-weight: 400; col
 }
 h1 {
   display: grid; gap: .9rem;
-  max-width: 24ch;
-  font-size: clamp(1.7rem, 2.9vw, 2.8rem);
+  max-width: 16ch;
+  font-size: clamp(2.2rem, 4.4vw, 4.2rem);
   font-weight: 500; line-height: 1.1; letter-spacing: -.03em;
 }
 h1 .zh {
   max-width: 26em;
-  font-size: .52em; font-weight: 400; line-height: 1.6; color: var(--muted);
+  font-size: .44em; font-weight: 400; line-height: 1.5; letter-spacing: .04em; color: var(--muted);
 }
 
 .hero-plate { position: relative; align-self: end; }
@@ -787,7 +787,7 @@ html.no-js .reveal { opacity: 1; transform: none; }
 
 @media (max-width: 620px) {
   :root { --bar: 3.1rem; }
-  h1 { font-size: clamp(1.6rem, 6.8vw, 2.2rem); }
+  h1 { font-size: clamp(2.1rem, 10vw, 2.9rem); }
   .chapters { flex-wrap: wrap; gap: 0 1.1rem; overflow: visible; }
   .chapters a { font-size: .7rem; letter-spacing: .03em; padding-top: .45rem; padding-bottom: .1rem; }
   .chapters { padding-bottom: .5rem; }
