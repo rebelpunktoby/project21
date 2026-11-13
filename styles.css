@@ -186,12 +186,28 @@ h3 [lang="zh-Hant"] { margin-top: .2rem; font-size: .78em; font-weight: 400; col
 /* =================================================================
    HERO
    ================================================================= */
+/* name frame — the 14 project names run round the hero's edge, like the
+   border text on a stamp. One SVG path; SMIL moves the text along it. */
+.name-frame {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: visible; z-index: 0;
+}
+.name-frame text {
+  font: 500 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  fill: var(--muted); fill-opacity: .62;
+}
+.name-frame .nf-sep { fill-opacity: .35; }
+.name-frame .nf-name { transition: fill .8s ease, fill-opacity .8s ease; }
+.name-frame .nf-name.is-now { fill: var(--nf-accent, var(--seal)); fill-opacity: 1; }
+.hero > :not(.name-frame) { position: relative; z-index: 1; }
+
 .hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
   gap: clamp(2rem, 6vw, 6rem);
   align-items: end;
-  padding: clamp(1.6rem, 4vh, 3rem) var(--pad) clamp(3rem, 7vh, 5.5rem);
+  padding: clamp(3.3rem, 6vh, 4rem) var(--pad) clamp(5rem, 9vh, 6rem);   /* room for the two-ring name frame */
   border-bottom: 1px solid var(--line);
 }
 .hero-copy {
@@ -210,6 +226,10 @@ h1 .zh {
 }
 
 .hero-plate { position: relative; align-self: end; }
+button.hero-frame {
+  display: block; padding: 0; border: 0; font: inherit; color: inherit; cursor: pointer;
+}
+button.hero-frame:focus-visible { outline: 2px solid var(--seal); outline-offset: 4px; }
 .hero-plate { justify-self: end; width: fit-content; max-width: 100%; }
 .hero-frame {
   position: relative; overflow: hidden;
@@ -224,11 +244,10 @@ h1 .zh {
 .hero-frame img.was-on { opacity: 1; z-index: 1; }              /* holds under the wipe */
 .hero-frame img.is-on {
   opacity: 1; z-index: 2;
-  animation: hero-wipe .9s cubic-bezier(.65,0,.2,1) both, hero-drift 7s linear both;
+  animation: hero-wipe .9s cubic-bezier(.65,0,.2,1) both;      /* no zoom: the frame never changes size */
 }
-.hero-frame img.is-first { animation-name: hero-drift; }        /* first plate: no wipe */
+.hero-frame img.is-first { animation: none; }                   /* first plate: no wipe */
 @keyframes hero-wipe  { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0); } }
-@keyframes hero-drift { from { transform: scale(1); } to { transform: scale(1.045); } }
 .hero-tick {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
   display: block; height: 2px;
@@ -624,7 +643,7 @@ body > footer .text-link { justify-self: end; }
 @supports (animation-timeline: view()) {
   .case-body .seq:not(.seq--opening) img {
     animation: var(--wipe, seq-wipe-y) 1ms linear forwards;
-    animation-timeline: view();
+    animation-timeline: view(inline);          /* the case scrolls sideways */
     animation-range: entry 0% entry 45%;
   }
   .case-body.wipe-x { --wipe: seq-wipe-x; }
@@ -703,6 +722,130 @@ body > footer .text-link { justify-self: end; }
   animation: none; mix-blend-mode: normal; object-fit: contain;
 }
 ::view-transition-old(plate) { display: none; }
+
+/* =================================================================
+   HORIZONTAL CASE — the home page reads down; a project reads across.
+   head panel → images in a row → next/close panel. Vertical wheel and
+   arrow keys move it sideways (site.js); phones swipe with snap.
+   ================================================================= */
+.hero-more { margin-top: 1rem; }
+.hero .name-frame .nf-inner { fill-opacity: .4; }
+
+.case { overflow: hidden; }
+.case-shell { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.case-track {
+  display: flex; align-items: center; gap: clamp(1.5rem, 3vw, 3.5rem);
+  min-height: 0; height: 100%;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  padding: 0 var(--pad); scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 55%, transparent) transparent;
+}
+.case-track:focus-visible { outline: 2px solid var(--seal); outline-offset: -4px; }
+.case-track > .case-head {
+  flex: 0 0 min(30rem, 34vw); align-self: center;
+  display: flex; flex-direction: column; gap: 1.1rem;
+  padding: 1.6rem 1.4rem; max-height: calc(100% - 2rem); overflow-y: auto;
+}
+.case-track .case-intro .read-full { grid-template-columns: 1fr; }
+.case-track > .case-body {
+  flex: 0 0 auto; height: 100%;
+  display: flex; align-items: center; gap: clamp(1.2rem, 2.4vw, 2.6rem); padding: 0;
+}
+.case-track .seq { flex: 0 0 auto; height: 78%; width: auto; margin: 0; }
+.case-track .seq img { height: 100%; width: auto; max-width: none; }
+.case-track .seq--full { height: 100%; margin: 0; }
+.case-track .seq--opening { margin: 0; }
+.case-track .seq--pair { display: flex; gap: var(--gap); height: 78%; }
+.case-track .pair-cell { height: 100%; flex: 0 0 auto; }
+.case-track .pair-cell img { height: 100%; width: auto; }
+.case-track .seq--pause { width: 2.5rem; height: auto; padding: 0; }
+.case-track .pause-rule { width: 2px; height: 3.5rem; }
+.case-track > .case-foot {
+  flex: 0 0 min(24rem, 70vw); align-self: center;
+  display: flex; flex-direction: column; margin: 0; border: 0; background: none;
+}
+.case-track > .case-foot .case-return { border-left: 0; }
+.case-track::after { content: ""; flex: 0 0 1px; }       /* end padding that flex scrollers otherwise drop */
+
+/* puzzles: same-shaped detail/product shots share one panel -------- */
+.case-track .seq--mosaic { display: grid; gap: 8px; height: 78%; width: auto; flex: 0 0 auto; }
+.seq--m2 { grid-template-columns: 1fr 1fr; }
+.seq--m3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.seq--m3 > .m-cell:first-child { grid-row: span 2; }
+.seq--m4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.seq--m2v { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+.m-cell {
+  position: relative; display: block; min-width: 0; min-height: 0;
+  padding: 0; border: 0; overflow: clip; cursor: zoom-in; background: var(--paper-2);
+}
+.case-track .m-cell img { width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.m-cell::after {
+  content: "+"; position: absolute; right: .5rem; bottom: .5rem;
+  width: 1.6rem; height: 1.6rem; display: grid; place-items: center;
+  background: var(--ink); color: var(--paper); font: 500 .9rem/1 var(--mono);
+  opacity: 0; transform: scale(.85); transition: opacity .25s ease, transform .25s ease;
+}
+.m-cell:hover::after, .m-cell:focus-visible::after { opacity: 1; transform: none; }
+.m-cell:focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
+@media (max-width: 620px) {
+  .case-track .seq--mosaic { height: auto; width: 86vw; scroll-snap-align: center; gap: 5px; }
+  .case-track .m-cell img { height: 100%; max-height: none; }
+  .m-cell::after { opacity: .85; transform: none; }       /* touch: show the hint */
+}
+/* zoom */
+.case-zoom {
+  position: absolute; inset: 0; z-index: 30;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem;
+  padding: 3.5rem var(--pad) 2rem;
+  background: color-mix(in srgb, var(--ink-2) 94%, transparent); cursor: zoom-out;
+  animation: zoom-in .25s ease;
+}
+.case-zoom[hidden] { display: none; }
+.case-zoom img { grid-column: 2; justify-self: center; max-width: 100%; max-height: calc(100dvh - 6rem); width: auto; height: auto; object-fit: contain; }
+.case-zoom-close {
+  position: absolute; top: 1rem; right: var(--pad); color: var(--paper);
+  font: 500 .72rem/1 var(--mono); letter-spacing: .09em; text-transform: uppercase;
+}
+.case-zoom-close [lang="zh-Hant"] { text-transform: none; margin-left: .35em; opacity: .72; }
+.case-zoom-nav { color: var(--paper); font: 400 1.4rem/1 var(--mono); padding: .8rem; opacity: .7; cursor: pointer; }
+.case-zoom-nav:hover { opacity: 1; }
+.case-zoom-nav.prev { grid-column: 1; } .case-zoom-nav.next { grid-column: 3; }
+@keyframes zoom-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* layers inside a project ------------------------------------------ */
+/* 1. parallax: each image drifts inside its frame as the strip passes; the opening plate holds still */
+.case-track .seq:not(.seq--opening), .case-track .pair-cell { overflow: clip; }   /* clip, not hidden: hidden would make each frame its own scroller and freeze the view() timelines */
+@supports (animation-timeline: view()) {
+  .case-body .seq:not(.seq--opening) img {
+    animation: var(--wipe, seq-wipe-y) 1ms linear forwards, seq-drift 1ms linear both;
+    animation-timeline: view(inline), view(inline);
+    animation-range: entry 0% entry 45%, cover 0% cover 100%;
+  }
+  @keyframes seq-drift { from { transform: translateX(5%) scale(1.1); } to { transform: translateX(-5%) scale(1.1); } }
+}
+/* 2. ghost title: the project's name, huge and outlined, sliding slower than the images */
+.case-ghost {
+  position: absolute; left: 0; bottom: 4vh; z-index: 0; pointer-events: none;
+  font: 600 clamp(9rem, 34vh, 22rem)/.8 var(--sans); letter-spacing: -.05em; white-space: nowrap;
+  color: transparent; -webkit-text-stroke: 1.5px var(--accent);
+  opacity: .16; will-change: transform;
+}
+/* 3. progress: a rule under the case bar, in the project's colour */
+.case-bar { position: sticky; }
+.case-progress {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--accent); transform: scaleX(0); transform-origin: left; will-change: transform;
+}
+
+@media (max-width: 620px) {
+  .case-track { scroll-snap-type: x mandatory; gap: 1rem; padding: 0 7vw; }
+  .case-track > .case-head, .case-track > .case-foot { flex-basis: 86vw; scroll-snap-align: center; }
+  .case-track .seq, .case-track .pair-cell { height: auto; width: 86vw; scroll-snap-align: center; }
+  .case-track .seq img, .case-track .pair-cell img { width: 100%; height: auto; max-height: 72dvh; object-fit: contain; }
+  .case-track .seq--pair { display: contents; }
+  .case-track .seq--full { height: auto; }
+  .case-track .seq--pause { display: none; }
+}
 
 /* =================================================================
    ERROR STATE
@@ -792,7 +935,7 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .chapters a { font-size: .7rem; letter-spacing: .03em; padding-top: .45rem; padding-bottom: .1rem; }
   .chapters { padding-bottom: .5rem; }
   .hero-plate { width: 100%; }
-  .hero { padding-top: 1.2rem; }
+  .hero { padding-top: 2.2rem; }   /* room for the name frame's top line */
 
   .chapter-head { align-items: flex-start; flex-direction: column; }
   .index { grid-template-columns: 1fr; gap: 2.2rem; }
@@ -829,7 +972,9 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .plate-frame, .plate-foot { opacity: 1 !important; transform: none !important; transition: none; }
   .hero-frame img.is-on { animation: none; }
   .hero-frame img.was-on { opacity: 0; }
-  .case-body .seq img { animation: none !important; clip-path: none; }
+  .case-body .seq img { animation: none !important; clip-path: none; transform: none !important; }
+  .case-ghost { display: none; }
+  .case-zoom { animation: none; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
   .hero-tick { display: none; }
   .plate-peek { display: none; }

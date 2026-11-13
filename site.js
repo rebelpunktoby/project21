@@ -301,23 +301,44 @@ function buildSequence(p) {
   return { opening, blocks };
 }
 
+/* Horizontal case sequence. Wide "full" images stand alone. Runs of
+   same-shaped images (portrait/square, or landscape) are grouped in a
+   rhythm — one big (focus), then a 2×2 puzzle, then a 1+2 puzzle,
+   repeat — so detail and product shots share a panel instead of each
+   taking a whole screen. Puzzle cells crop to fill; tap to see whole. */
 function sequenceHTML(p) {
-  const { opening, blocks } = buildSequence(p);
+  const all = sheet(p.slug);
+  const opening = all.find(x => x.n === p.cover);
+  const rest = all.filter(x => x.n !== p.cover);
   let n = 0;
-  const alt = i => `${p.title} — case study image ${i}`;
-
-  const head = `<figure class="seq seq--opening">${imgTag(p.slug, opening, `${p.title} — title plate`, true)}</figure>`;
-
-  const body = blocks.map(b => {
-    if (b.kind === "pause") return `<div class="seq seq--pause" aria-hidden="true"><span class="pause-rule"></span></div>`;
-    if (b.kind === "pair") {
-      return `<div class="seq seq--pair">${b.items.map(it =>
-        `<figure class="pair-cell">${imgTag(p.slug, it, alt(++n), n === 1)}</figure>`).join("")}</div>`;
+  const alt = () => `${p.title} — case study image ${++n}`;
+  const fam = x => { const k = classify(x.r); return k === "full" ? "full" : k === "wide" ? "land" : "port"; };
+  const single = it => `<figure class="seq seq--${classify(it.r)}">${imgTag(p.slug, it, alt(), n === 0)}</figure>`;
+  const mosaic = (items, land) => {
+    const r = items.reduce((s, x) => s + x.r, 0) / items.length;
+    const stack = land && items.length === 2;                  /* landscape pair: one above the other */
+    const ratio = items.length === 4 ? r : items.length === 3 ? r * 1.5 : stack ? r / 2 : r * 2;
+    return `<div class="seq seq--mosaic seq--m${items.length}${stack ? "v" : ""}" style="aspect-ratio:${ratio.toFixed(3)}">${items.map(it =>
+      `<button class="m-cell" type="button" data-zoom="${src(p.slug, it.n)}" aria-label="${esc("View larger 放大檢視")}">${imgTag(p.slug, it, alt(), false)}</button>`).join("")}</div>`;
+  };
+  const groupRun = (run, land) => {
+    const sizes = land ? [1, 4, 2] : [1, 4, 3], out = [];
+    for (let k = 0, g = 0; k < run.length; g++) {
+      const take = Math.min(sizes[g % 3], run.length - k);
+      out.push(take === 1 ? single(run[k]) : mosaic(run.slice(k, k + take), land));
+      k += take;
     }
-    return `<figure class="seq seq--${b.kind}">${imgTag(p.slug, b.items[0], alt(++n), n === 1)}</figure>`;
-  }).join("");
-
-  return head + body;
+    return out;
+  };
+  const panels = [];
+  for (let i = 0; i < rest.length;) {
+    /* wide and full-width shots form one landscape family */
+    const f = fam(rest[i]) === "port" ? "port" : "land";
+    let j = i; while (j < rest.length && (fam(rest[j]) === "port" ? "port" : "land") === f) j++;
+    panels.push(...groupRun(rest.slice(i, j), f === "land"));
+    i = j;
+  }
+  return `<figure class="seq seq--opening">${imgTag(p.slug, opening, `${p.title} — title plate`, true)}</figure>` + panels.join("");
 }
 
 /* ------------------------------------------------------------------ *
@@ -360,6 +381,9 @@ function showProject(p) {
   document.body.classList.add("dialog-open");
   if (!dialog.open) dialog.showModal();
   dialog.scrollTop = 0;
+  const tr = $("#case-track"); if (tr) tr.scrollLeft = 0;
+  const gh = $("#case-ghost"); if (gh) gh.textContent = p.title;
+  dialog.dispatchEvent(new Event("case:open"));
 }
 
 /* The clicked frame (index plate, or the hero) expands into the case
@@ -370,7 +394,7 @@ function openProject(slug, trigger) {
   if (trigger) lastTrigger = trigger;
 
   const source = trigger && (trigger.closest(".plate")?.querySelector(".plate-frame")
-                          || (trigger.id === "hero-open" ? $("#hero-frame") : null));
+                          || (trigger.id === "hero-frame" ? trigger : null));
   if (!document.startViewTransition || prefersReduced() || !source || dialog.open) {
     showProject(p); return;
   }
@@ -396,7 +420,9 @@ const caseDim = { img: null, slug: null, raf: 0 };
 function caseDimDraw() {
   caseDim.raf = 0;
   if (!dialog.open || !caseDim.img) return;
-  const st = dialog.scrollTop, max = Math.max(1, dialog.scrollHeight - dialog.clientHeight);
+  const tr = $("#case-track");
+  const st = tr ? tr.scrollLeft : dialog.scrollTop;
+  const max = Math.max(1, tr ? tr.scrollWidth - tr.clientWidth : dialog.scrollHeight - dialog.clientHeight);
   kaleidoPaint($("#case-dim"), performance.now(), {
     scale: .25, img: caseDim.img, lens: false,
     p: .3 + (st / max) * .45, rot: st * 0.0006 + PROJECTS.findIndex(x => x.slug === caseDim.slug) * .4
@@ -416,6 +442,87 @@ function caseDimSet(p) {
 }
 dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
 
+/* ------------------------------------------------------------------ *
+ * ZOOM — tap a puzzle cell to see the whole image; ← → step through
+ * the puzzle images, Esc or a tap closes and returns focus to the cell.
+ * ------------------------------------------------------------------ */
+(() => {
+  const zoom = $("#case-zoom"); if (!zoom) return;
+  const zi = $("img", zoom);
+  let list = [], at = 0, opener = null;
+  const show = k => {
+    at = (k + list.length) % list.length;
+    zi.src = list[at].dataset.zoom;
+    zi.alt = list[at].querySelector("img").alt;
+  };
+  dBody.addEventListener("click", e => {
+    const b = e.target.closest(".m-cell"); if (!b) return;
+    list = $$(".m-cell", dBody); opener = b; show(list.indexOf(b));
+    zoom.hidden = false; $(".case-zoom-close", zoom).focus();
+  });
+  const close = () => { if (zoom.hidden) return; zoom.hidden = true; zi.removeAttribute("src"); if (opener) opener.focus(); };
+  zoom.addEventListener("click", e => {
+    const nav = e.target.closest(".case-zoom-nav");
+    if (nav) { show(at + (nav.classList.contains("next") ? 1 : -1)); return; }
+    close();
+  });
+  dialog.addEventListener("cancel", e => { if (!zoom.hidden) { e.preventDefault(); close(); } });
+  dialog.addEventListener("keydown", e => {
+    if (zoom.hidden) return;
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { show(at + (e.key === "ArrowRight" ? 1 : -1)); }
+    else if (!["PageDown", "PageUp", "ArrowDown", "ArrowUp", " ", "Home", "End"].includes(e.key)) return;
+    e.preventDefault(); e.stopImmediatePropagation();      /* the strip behind stays put */
+  }, true);
+  dialog.addEventListener("close", () => { zoom.hidden = true; zi.removeAttribute("src"); });
+})();
+
+/* ------------------------------------------------------------------ *
+ * HORIZONTAL CASE — a vertical wheel moves the track sideways; arrow,
+ * page and space keys step through it. Trackpads and touch keep their
+ * own sideways scroll. The head panel scrolls itself when it overflows.
+ * ------------------------------------------------------------------ */
+(() => {
+  const track = $("#case-track"); if (!track) return;
+  track.addEventListener("scroll", caseDimSchedule, { passive: true });
+  /* ghost title slides at a quarter of the strip's speed; progress rule fills */
+  const ghost = $("#case-ghost"), prog = $("#case-progress");
+  let tick = false;
+  const layers = () => {
+    tick = false;
+    const max = Math.max(1, track.scrollWidth - track.clientWidth), x = track.scrollLeft;
+    if (ghost && !prefersReduced()) ghost.style.transform = `translate3d(${(-x * .25 + innerWidth * .04).toFixed(1)}px,0,0)`;
+    if (prog) prog.style.transform = `scaleX(${(x / max).toFixed(4)})`;
+  };
+  track.addEventListener("scroll", () => { if (!tick) { tick = true; requestAnimationFrame(layers); } }, { passive: true });
+  dialog.addEventListener("case:open", layers);
+  track.addEventListener("wheel", e => {
+    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;            /* sideways gesture: native */
+    const head = e.target.closest(".case-head");
+    if (head && head.scrollHeight > head.clientHeight + 2) {          /* long text in the head panel */
+      const atTop = head.scrollTop <= 0, atEnd = head.scrollTop + head.clientHeight >= head.scrollHeight - 1;
+      if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return;
+    }
+    const k = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? track.clientWidth : 1;
+    track.scrollLeft += e.deltaY * k;
+    e.preventDefault();
+  }, { passive: false });
+  dialog.addEventListener("keydown", e => {
+    if (!dialog.open || e.altKey || e.ctrlKey || e.metaKey) return;
+    const tag = e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    const step = track.clientWidth * .8, smooth = prefersReduced() ? "auto" : "smooth";
+    const native = e.target === track && (e.key === "ArrowLeft" || e.key === "ArrowRight");
+    let dx = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown" || (e.key === " " && tag !== "BUTTON")) dx = step;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") dx = -step;
+    else if (e.key === "Home") { track.scrollTo({ left: 0, behavior: smooth }); e.preventDefault(); return; }
+    else if (e.key === "End") { track.scrollTo({ left: track.scrollWidth, behavior: smooth }); e.preventDefault(); return; }
+    if (dx === null || native) return;
+    track.scrollBy({ left: dx, behavior: smooth });
+    e.preventDefault();
+  });
+})();
+
 const closeProject = () => { if (dialog.open) dialog.close(); };
 
 /* single cleanup path — also catches Escape */
@@ -434,6 +541,7 @@ dialog.addEventListener("click", e => { if (e.target === dialog) closeProject();
 dNext.addEventListener("click", () => {
   if (!dNext.dataset.slug) return;
   showProject(PROJECTS.find(x => x.slug === dNext.dataset.slug));
+  const tr = $("#case-track"); if (tr) tr.scrollTo({ left: 0, behavior: "auto" });
   dialog.scrollTo({ top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
 });
 
@@ -512,15 +620,16 @@ const HERO = [
 const HERO_MS = 5600;
 
 function initHero() {
-  const frame = $("#hero-frame"), tick = $("#hero-tick"), open = $("#hero-open");
+  /* the image itself is the button; the name frame's lit name says which project it is */
+  const frame = $("#hero-frame"), tick = $("#hero-tick"), open = frame;
   if (!frame) return;
   const project = slug => PROJECTS.find(p => p.slug === slug);
   const setCaption = slug => {
     const p = project(slug);
     weather.set(slug);
+    nameFrame.mark(slug);
     open.dataset.slug = slug;
-    $(".hero-name", open).textContent = p.title;
-    $(".hero-scope", open).innerHTML = `${esc(p.scope.en)} <span lang="zh-Hant">${esc(p.scope.zh)}</span>`;
+    open.setAttribute("aria-label", `${L.openProject}: ${p.title}`);
     $("#hero-plate").style.setProperty("--hero-accent", p.accent);
   };
   open.addEventListener("click", () => openProject(open.dataset.slug, open));
@@ -546,8 +655,7 @@ function initHero() {
       setTimeout(() => prev.classList.remove("was-on"), 1000);   /* after the wipe */
       void img.offsetWidth;                 /* restart the animations */
       img.classList.add("is-on");
-      open.classList.add("is-swapping");
-      setTimeout(() => { setCaption(slug); open.classList.remove("is-swapping"); }, 350);
+      setCaption(slug);
       i = n; busy = false; run();
     };
     if (img) { show(); return; }
@@ -937,6 +1045,106 @@ function initViews() {
 }
 
 /* ------------------------------------------------------------------ *
+ * 10g. NAME FRAME — the project names run clockwise round the hero.
+ * One rounded-rectangle path (desktop) or two edge lines (phone). The
+ * text is two exact laps long and stretched to fit (textLength), so
+ * sliding it one lap via SMIL startOffset loops with no seam. SVG
+ * animation only — no per-frame script. Paused off screen and in a
+ * hidden tab; still under reduced motion. Decorative (aria-hidden).
+ * ------------------------------------------------------------------ */
+function initNameFrame() {
+  const svg = $("#name-frame"), hero = svg && svg.parentElement;
+  if (!svg) return nameFrame;
+  const NS = "http://www.w3.org/2000/svg", still = prefersReduced();
+  const LAP_S = 75, PHONE_PX_PER_S = 15;                    /* desktop: one lap in 75 s; phone: slower drift */
+  let current = null;
+
+  const seq = () => PROJECTS.map(p =>
+    `<tspan class="nf-name" data-slug="${p.slug}">${esc(p.title)}</tspan><tspan class="nf-sep"> · </tspan>`).join("");
+
+  function measureCycle() {
+    const t = document.createElementNS(NS, "text");
+    t.innerHTML = seq(); svg.appendChild(t);
+    const len = t.getComputedTextLength(); t.remove(); return len;
+  }
+
+  /* one closed or open path → a textPath that loops seamlessly along it */
+  /* dir +1: text travels along the path's direction; -1: against it */
+  function lane(id, d, P, cycle, dir, dur, cls = "") {
+    const k = Math.max(1, Math.round(P / cycle));             /* whole sequences per lap */
+    const lap = seq().repeat(k);
+    const anim = still ? "" :
+      `<animate attributeName="startOffset" from="${dir > 0 ? -P : 0}" to="${dir > 0 ? 0 : -P}" dur="${dur.toFixed(1)}s" begin="indefinite" repeatCount="indefinite"/>`;
+    return `<path id="${id}" d="${d}" fill="none"/>
+      <text class="${cls}"><textPath href="#${id}" textLength="${(2 * P).toFixed(1)}" lengthAdjust="spacing" startOffset="${dir > 0 ? -P : 0}">${lap}${lap}${anim}</textPath></text>`;
+  }
+
+  function build() {
+    const w = hero.clientWidth, h = hero.clientHeight;
+    if (!w || !h) return;
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    const cycle = measureCycle(); if (!cycle) return;
+    const phone = w <= 620;
+    const ins = phone ? 7 : 14;                               /* glyphs sit outside the path, toward the edge */
+    const cap = 11;                                           /* ~cap height of the 10.5px mono */
+    let out = "";
+    if (!phone) {
+      /* glyphs sit on the outer side of the path, so the path runs one cap-height in on
+         every edge: each ring's glyph band is the same distance from all four edges */
+      const x0 = ins + cap, y0 = ins + cap, x1 = w - ins - cap, y1 = h - ins - cap, r = 10;
+      const d = `M${x0 + r},${y0} H${x1 - r} A${r},${r} 0 0 1 ${x1},${y0 + r} V${y1 - r} A${r},${r} 0 0 1 ${x1 - r},${y1} H${x0 + r} A${r},${r} 0 0 1 ${x0},${y1 - r} V${y0 + r} A${r},${r} 0 0 1 ${x0 + r},${y0} Z`;
+      const P = 2 * (x1 - x0 + y1 - y0) - (8 - 2 * Math.PI) * r;
+      out = lane("nf-ring", d, P, cycle, +1, LAP_S);          /* path runs clockwise; text travels with it */
+      /* inner ring: one line-height in, running the other way, slower and fainter */
+      const g = cap + 5, ri = Math.max(4, r - 4);
+      const X0 = x0 + g, Y0 = y0 + g, X1 = x1 - g, Y1 = y1 - g;
+      const cs = getComputedStyle(hero), room = Math.min(parseFloat(cs.paddingLeft), parseFloat(cs.paddingRight), parseFloat(cs.paddingTop));
+      if (room >= ins + g + cap + 4 && X1 - X0 > 200 && Y1 - Y0 > 200) {
+        const di = `M${X0 + ri},${Y0} H${X1 - ri} A${ri},${ri} 0 0 1 ${X1},${Y0 + ri} V${Y1 - ri} A${ri},${ri} 0 0 1 ${X1 - ri},${Y1} H${X0 + ri} A${ri},${ri} 0 0 1 ${X0},${Y1 - ri} V${Y0 + ri} A${ri},${ri} 0 0 1 ${X0 + ri},${Y0} Z`;
+        const Pi = 2 * (X1 - X0 + Y1 - Y0) - (8 - 2 * Math.PI) * ri;
+        out += lane("nf-ring-in", di, Pi, cycle, -1, LAP_S * 1.35, "nf-inner");
+      }
+    } else {
+      const y0 = ins + cap, y1 = h - ins, x0 = ins, x1 = w - ins, P = x1 - x0;
+      /* two upright lines: top drifts right, bottom drifts left, slower than desktop */
+      out = ticker("nf-top", `M${x0},${y0} H${x1}`, cycle, +1, cycle / PHONE_PX_PER_S)
+          + ticker("nf-bot", `M${x0},${y1} H${x1}`, cycle, -1, cycle / PHONE_PX_PER_S);
+    }
+    svg.innerHTML = out;
+    /* animations inserted after load don't start on the document clock in Chrome: start them explicitly */
+    requestAnimationFrame(() => $$("animate", svg).forEach(a => { try { a.beginElement(); } catch (_) {} }));
+    if (current) mark(current);
+  }
+
+  /* an open line shorter than the name list: no stretching — two copies at natural
+     spacing slide by one copy's length, which loops seamlessly (the path clips the rest) */
+  function ticker(id, d, cycle, dir, dur) {
+    const anim = still ? "" :
+      `<animate attributeName="startOffset" from="${dir > 0 ? -cycle : 0}" to="${dir > 0 ? 0 : -cycle}" dur="${dur.toFixed(1)}s" begin="indefinite" repeatCount="indefinite"/>`;
+    return `<path id="${id}" d="${d}" fill="none"/>
+      <text><textPath href="#${id}" startOffset="${dir > 0 ? -cycle : 0}">${seq()}${seq()}${anim}</textPath></text>`;
+  }
+
+  function mark(slug) {
+    current = slug;
+    const p = PROJECTS.find(x => x.slug === slug);
+    if (p) svg.style.setProperty("--nf-accent", p.accent);
+    $$(".nf-name", svg).forEach(t => t.classList.toggle("is-now", t.dataset.slug === slug));
+  }
+
+  build();
+  let rt = 0;
+  new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(build, 150); }).observe(hero);
+  if (!still) {
+    let onScreen = true;
+    const sync = () => (onScreen && !document.hidden) ? svg.unpauseAnimations() : svg.pauseAnimations();
+    new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; sync(); }).observe(hero);
+    document.addEventListener("visibilitychange", sync);
+  }
+  return { mark };
+}
+
+/* ------------------------------------------------------------------ *
  * 10d. LIVING BACKGROUND
  * setWeather(slug) tints the paper with that project's accent and
  * lights the glows in it and the next project's accent. The two .wx
@@ -946,6 +1154,7 @@ function initViews() {
  * crossfade (CSS turns the transition off).
  * ------------------------------------------------------------------ */
 let weather = { set() {} };
+let nameFrame = { mark() {} };
 function initWeather() {
   const layers = $$("#weather .wx");
   if (layers.length < 2) return weather;
@@ -1058,6 +1267,7 @@ renderFilters();
 renderIndex();
 initChapters();
 weather = initWeather();   /* before the hero, which sets the first colour */
+nameFrame = initNameFrame();
 initHero();
 initDimensions();
 initViews();
