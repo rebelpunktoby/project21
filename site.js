@@ -255,6 +255,7 @@ function renderIndex() {
   observeThread(grid);
   initPeek(grid);
   initCursorCue(grid);
+  if (typeof fxRender === "function") fxRender();
 }
 
 function renderFilters() {
@@ -699,7 +700,7 @@ function setKaleidoSource(slug) {
   img.src = peek ? peek.src : thumb(slug);
   (img.decode ? img.decode() : Promise.resolve()).then(() => {
     if (kal.slug !== slug) return;
-    if (kal.img && (kal.visible || dim.visible) && !prefersReduced()) { kal.prev = kal.img; kal.fadeT0 = performance.now(); }
+    if (kal.img && (kal.visible || dim.visible || fx.on) && !prefersReduced()) { kal.prev = kal.img; kal.fadeT0 = performance.now(); }
     kal.img = img;
     if (kal.visible) { cancelAnimationFrame(kal.raf); kal.raf = 0; kaleidoSchedule(); }
     if (dim.visible) { cancelAnimationFrame(dim.raf); dim.raf = 0; dimSchedule(); }
@@ -753,7 +754,7 @@ function initDimensions() {
   const update = () => {
     ticking = false;
     const r = work.getBoundingClientRect();
-    const inWork = r.top < innerHeight * .6 && r.bottom > innerHeight * .4;
+    const inWork = fx.view === "grid" && r.top < innerHeight * .6 && r.bottom > innerHeight * .4;
     if (inWork !== dim.visible) {
       dim.visible = inWork;
       cv.classList.toggle("is-on", inWork);
@@ -782,6 +783,157 @@ function initDimensions() {
   update();
   /* a filter re-render replaces the plates: re-evaluate */
   new MutationObserver(() => { focused = null; update(); }).observe(grid, { childList: true });
+}
+
+/* ------------------------------------------------------------------ *
+ * 10f. ALT VIEWS — Field 場 and Deck 疊.
+ * Desktop with motion only; the grid stays default. Both stage the
+ * work on a full-strength kaleidoscope of the project in front, its
+ * hue drifting (CSS filter on a half-resolution canvas). Field: drag
+ * through an open plane, plates at depth with parallax. Deck: native
+ * scroll flips through a stack. One rAF loop, only while on screen.
+ * ------------------------------------------------------------------ */
+const fx = { view: "grid", on: false, raf: 0, el: null, cv: null, items: [], cam: { x: 0, y: 0, tx: 0, ty: 0 }, mouse: { x: 0, y: 0 }, front: null, io: null };
+const fxAllowed = () => !prefersReduced() && matchMedia("(min-width: 760px) and (hover: hover)").matches;
+
+function fxItem(p, cls = "") {
+  const cov = sheet(p.slug).find(x => x.n === p.cover);
+  return `<button class="plate fx-item ${cls}" type="button" data-slug="${p.slug}" style="--accent:${p.accent}" aria-label="${esc(L.openProject + ": " + p.title)}">
+  <span class="plate-frame"><img src="${thumb(p.slug)}" width="${cov.w}" height="${cov.h}" alt="${esc(p.title)} — title plate" decoding="async"></span>
+  <span class="plate-foot"><span class="plate-name">${esc(p.title)}</span><span class="plate-scope">${pair(p.scope)}</span></span>
+</button>`;
+}
+
+function fxRender() {
+  const box = $("#fx"); if (!box) return;
+  cancelAnimationFrame(fx.raf); fx.raf = 0;
+  if (fx.io) { fx.io.disconnect(); fx.io = null; }
+  if (fx.view === "grid") { box.hidden = true; box.innerHTML = ""; fx.on = false; return; }
+  const list = visibleProjects();
+  box.hidden = false;
+  if (fx.view === "field") {
+    box.innerHTML = `<div class="fx-field"><canvas class="fx-canvas"></canvas>${list.map(p => fxItem(p)).join("")}
+      <p class="fx-hint">Drag to drift <span lang="zh-Hant">拖曳漫遊</span></p></div>`;
+    fx.el = $(".fx-field", box);
+  } else {
+    box.innerHTML = `<div class="fx-deck" style="height:${(list.length + .6) * 70}vh"><div class="fx-deck-stage"><canvas class="fx-canvas"></canvas>${list.map(p => fxItem(p)).join("")}</div></div>`;
+    fx.el = $(".fx-deck", box);
+  }
+  fx.cv = $(".fx-canvas", box);
+  fx.items = $$(".fx-item", box).map((el, i) => ({ el, i, slug: el.dataset.slug }));
+  fx.items.forEach(({ el }) => el.addEventListener("click", e => {
+    if (fx.dragged) { e.preventDefault(); return; }
+    openProject(el.dataset.slug, el);
+  }));
+  if (fx.view === "field") fieldSetup(); else deckSetup();
+  fx.io = new IntersectionObserver(([e]) => {
+    fx.on = e.isIntersecting;
+    if (fx.on && !fx.raf) fx.raf = requestAnimationFrame(fxLoop);
+  });
+  fx.io.observe(fx.el);
+}
+
+/* ---- Field: a loose spiral of plates on a plane, each at its own depth */
+function fieldSetup() {
+  const n = fx.items.length, field = fx.el;
+  fx.items.forEach((it, i) => {
+    const a = i * 2.39996, r = 260 + 120 * Math.sqrt(i) * 2.1;        /* golden-angle spiral */
+    it.x = Math.cos(a) * r; it.y = Math.sin(a) * r * .62;
+    it.z = .55 + ((i * 37) % 10) / 14;                                  /* depth .55 – 1.2 */
+    it.el.style.setProperty("--w", `${Math.round(250 * it.z)}px`);
+    it.el.style.zIndex = Math.round(it.z * 20);
+  });
+  fx.cam = { x: 0, y: 0, tx: 0, ty: 0 };
+  let drag = null;
+  field.addEventListener("pointerdown", e => {
+    drag = { x: e.clientX, y: e.clientY, cx: fx.cam.tx, cy: fx.cam.ty, moved: 0, id: e.pointerId };
+    fx.dragged = false;              /* capture only once it's really a drag, so a click still reaches the plate */
+  });
+  field.addEventListener("pointermove", e => {
+    const r = field.getBoundingClientRect();
+    fx.mouse.x = (e.clientX - r.left) / r.width - .5; fx.mouse.y = (e.clientY - r.top) / r.height - .5;
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
+    if (drag.moved > 6 && !fx.dragged) {
+      fx.dragged = true; field.classList.add("is-dragging");
+      try { field.setPointerCapture(drag.id); } catch (_) {}
+    }
+    const lim = 260 + 120 * Math.sqrt(n) * 2.1;
+    fx.cam.tx = Math.max(-lim, Math.min(lim, drag.cx - dx * 1.4));
+    fx.cam.ty = Math.max(-lim * .62, Math.min(lim * .62, drag.cy - dy * 1.4));
+  });
+  const end = () => { drag = null; field.classList.remove("is-dragging"); setTimeout(() => fx.dragged = false, 0); };
+  /* a drag that ends over a plate must not open it */
+  field.addEventListener("click", e => { if (fx.dragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+  field.addEventListener("pointerup", end); field.addEventListener("pointercancel", end);
+}
+
+/* ---- Deck: scroll position → which card is on top */
+function deckSetup() { /* positions are computed each frame from scroll */ }
+
+function fxLoop(t) {
+  fx.raf = 0;
+  if (!fx.on || fx.view === "grid") return;
+  let front = null;
+  if (fx.view === "field") {
+    const r = fx.el.getBoundingClientRect(), cx = r.width / 2, cy = r.height / 2;
+    fx.cam.x += (fx.cam.tx + fx.mouse.x * 120 - fx.cam.x) * .08;
+    fx.cam.y += (fx.cam.ty + fx.mouse.y * 80 - fx.cam.y) * .08;
+    let best = Infinity;
+    for (const it of fx.items) {
+      const bob = Math.sin(t * .0006 + it.i * 1.7) * 10 * it.z;
+      const sx = cx + (it.x - fx.cam.x) * it.z, sy = cy + (it.y - fx.cam.y) * it.z + bob;
+      const w = 250 * it.z;
+      it.el.style.transform = `translate3d(${(sx - w / 2).toFixed(1)}px, ${(sy - w * .4).toFixed(1)}px, 0) rotate(${(Math.sin(t * .0003 + it.i) * 1.5).toFixed(2)}deg)`;
+      const d = Math.hypot(sx - cx, sy - cy) / it.z;
+      if (d < best) { best = d; front = it; }
+    }
+  } else {
+    const r = fx.el.getBoundingClientRect(), n = fx.items.length;
+    const q = Math.max(0, Math.min(n - 1, (-r.top) / (r.height - innerHeight) * (n - .4)));
+    for (const it of fx.items) {
+      const d = it.i - q;
+      let tf, op = 1;
+      if (d < -1.2) { op = 0; tf = "translate3d(-50%, -160%, 0)"; }
+      else if (d < 0) {                     /* flying away: up, tipping back, turning */
+        tf = `translate3d(-50%, calc(-50% + ${(d * 95).toFixed(1)}vh), ${(-d * 200).toFixed(0)}px) rotateX(${(-d * 62).toFixed(1)}deg) rotateZ(${(d * 9).toFixed(1)}deg)`;
+        op = 1 + d * .85;
+      } else {                              /* waiting in the stack */
+        tf = `translate3d(-50%, calc(-50% + ${(d * 22).toFixed(1)}px), ${(-d * 70).toFixed(0)}px) rotateZ(${(Math.sin(it.i * 2.3) * 4 * Math.min(1, d)).toFixed(2)}deg)`;
+        op = d > 4 ? 0 : 1 - d * .12;
+      }
+      it.el.style.transform = tf; it.el.style.opacity = op.toFixed(3);
+      it.el.style.zIndex = String(100 - it.i);
+      it.el.style.pointerEvents = d > -0.5 && d < 0.5 ? "auto" : "none";
+    }
+    front = fx.items[Math.min(n - 1, Math.round(q))];
+  }
+  if (front && front.slug !== fx.front) { fx.front = front.slug; setKaleidoSource(front.slug); weather.set(front.slug); setThread(front.el.style.getPropertyValue("--accent")); }
+  /* the stage: full kaleidoscope, always turning, faster while you move */
+  const p = .5 + Math.sin(t * .00017) * .3;
+  const more = kaleidoPaint(fx.cv, t, { scale: .5, p, lens: true, rot: t * .00009 + fx.cam.x * .0012 + scrollY * .0006 });
+  if (!more && !kal.raf && !dim.raf) kal.prev = null;
+  fx.raf = requestAnimationFrame(fxLoop);
+}
+
+function initViews() {
+  const box = $("#views"); if (!box) return;
+  const sync = () => {
+    const ok = fxAllowed();
+    box.hidden = !ok;
+    if (!ok && fx.view !== "grid") setView("grid");
+  };
+  const setView = v => {
+    fx.view = v; document.body.dataset.view = v;
+    $$("[data-view]", box).forEach(b => { const on = b.dataset.view === v; b.classList.toggle("is-active", on); b.setAttribute("aria-pressed", String(on)); });
+    fxRender();
+    if (v !== "grid") $("#work").scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth" });
+  };
+  $$("[data-view]", box).forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+  addEventListener("resize", sync);
+  document.body.dataset.view = "grid";
+  sync();
 }
 
 /* ------------------------------------------------------------------ *
@@ -908,5 +1060,6 @@ initChapters();
 weather = initWeather();   /* before the hero, which sets the first colour */
 initHero();
 initDimensions();
+initViews();
 initKaleido();
 watchImages(document);

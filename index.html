@@ -74,10 +74,18 @@
       <section class="chapter chapter--work" id="work" aria-labelledby="work-title">
         <div class="chapter-head">
           <h2 id="work-title">Work <span lang="zh-Hant">作品</span></h2>
-          <div class="chips" id="filters" role="group" aria-label="Filter projects by category 依類別篩選項目"></div>
+          <div class="work-controls">
+            <div class="chips" id="filters" role="group" aria-label="Filter projects by category 依類別篩選項目"></div>
+            <div class="views" id="views" role="group" aria-label="View 檢視" hidden>
+              <button class="chip is-active" type="button" data-view="grid" aria-pressed="true">Grid <span lang="zh-Hant">格</span></button>
+              <button class="chip" type="button" data-view="field" aria-pressed="false">Field <span lang="zh-Hant">場</span></button>
+              <button class="chip" type="button" data-view="deck" aria-pressed="false">Deck <span lang="zh-Hant">疊</span></button>
+            </div>
+          </div>
         </div>
 
         <div class="index" id="project-index"></div>
+        <div class="fx" id="fx" hidden></div>
         <p class="index-empty" id="index-empty" hidden></p>
       </section>
 
