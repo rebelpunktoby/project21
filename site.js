@@ -347,7 +347,7 @@ function sequenceHTML(p) {
 const dialog = $("#project-dialog");
 const dCat = $("#d-cat"), dTitle = $("#d-title"), dScope = $("#d-scope"),
       dDesc = $("#d-desc"), dBody = $("#d-body"), dBar = $("#d-bar-title"),
-      dNext = $("#d-next"), dRead = $("#case-read");
+      dNext = $("#d-next"), dSheetTitle = $("#d-sheet-title");
 
 function fillDialog(p) {
   dialog.style.setProperty("--accent", p.accent);
@@ -358,7 +358,8 @@ function fillDialog(p) {
   dDesc.innerHTML =
     `<div class="read-col" lang="en"><p>${esc(p.description.en)}</p></div>` +
     `<div class="read-col" lang="zh-Hant"><p>${esc(p.description.zh)}</p></div>`;
-  setRead(dRead, false);   /* every project opens compact */
+  dSheetTitle.textContent = p.title;
+  caseSheet.set(false);    /* every project opens with the text put away */
 
   const list = visibleProjects();
   const next = list.length > 1 ? list[(list.indexOf(p) + 1) % list.length] : null;
@@ -544,6 +545,33 @@ dNext.addEventListener("click", () => {
   const tr = $("#case-track"); if (tr) tr.scrollTo({ left: 0, behavior: "auto" });
   dialog.scrollTo({ top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
 });
+
+/* CASE TEXT — Read 閱讀 sits in the case bar beside Close, so it is in the
+   same place wherever you are in the strip. It slides a text sheet over the
+   images (right side on desktop, bottom on phone). Esc, Hide, or a tap on the
+   images puts it away. */
+const caseSheet = (() => {
+  const btn = $("#case-info"), sheet = $("#case-sheet"), track = $("#case-track");
+  if (!btn || !sheet) return { set() {} };
+  const isOpen = () => !sheet.hidden;
+  function set(open) {
+    sheet.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    dialog.classList.toggle("sheet-open", open);
+    if (open) {
+      dialog.style.setProperty("--bar-h", $(".case-bar", dialog).offsetHeight + "px");
+      sheet.scrollTop = 0;
+    }
+  }
+  btn.addEventListener("click", () => set(!isOpen()));
+  track.addEventListener("click", e => {
+    if (isOpen() && !e.target.closest("button, a")) set(false);
+  });
+  dialog.addEventListener("cancel", e => {
+    if (isOpen() && $("#case-zoom").hidden) { e.preventDefault(); set(false); btn.focus(); }
+  });
+  return { set };
+})();
 
 /* ------------------------------------------------------------------ *
  * 9. READ 閱讀 — compact text that expands to EN + ZH side by side

@@ -208,23 +208,27 @@
           <span class="case-bar-mark" aria-hidden="true"></span>
           <span class="case-bar-title" id="d-bar-title"></span>
           <span class="case-progress" id="case-progress" aria-hidden="true"></span>
+          <button class="case-info" id="case-info" type="button" aria-expanded="false" aria-controls="case-sheet">
+            <span class="ci-open">Read <span lang="zh-Hant">閱讀</span></span>
+            <span class="ci-shut">Hide <span lang="zh-Hant">收起</span></span>
+            <i aria-hidden="true">+</i>
+          </button>
           <button class="case-close js-close" type="button" aria-label="Close project 關閉項目">
             <span>Close <span lang="zh-Hant">關閉</span></span><i aria-hidden="true">×</i>
           </button>
         </div>
 
+        <aside class="case-sheet" id="case-sheet" aria-label="About this project 項目介紹" hidden>
+          <p class="case-sheet-title" id="d-sheet-title"></p>
+          <div class="case-sheet-text" id="d-desc"></div>
+        </aside>
+
         <div class="case-track" id="case-track" tabindex="0" aria-label="Project images 項目圖片">
         <header class="case-head">
           <p class="case-cat" id="d-cat"></p>
-          <div class="case-intro read" id="case-read">
+          <div class="case-intro">
             <h2 id="d-title"></h2>
             <p class="case-scope" id="d-scope"></p>
-            <div class="read-full" id="d-desc" hidden></div>
-            <button class="read-toggle" type="button" aria-expanded="false" aria-controls="d-desc" data-read="case">
-              <span class="read-more">Read <span lang="zh-Hant">閱讀</span></span>
-              <span class="read-less">Less <span lang="zh-Hant">收起</span></span>
-              <i aria-hidden="true">+</i>
-            </button>
           </div>
         </header>
 
