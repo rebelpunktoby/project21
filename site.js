@@ -593,6 +593,25 @@ $$(".read").forEach(block => {
 /* ------------------------------------------------------------------ *
  * 10. ORIENTATION — active nav link, progress rule
  * ------------------------------------------------------------------ */
+/* HEADER TUCK — on phones and tablets the header is two rows tall, so it
+   slides away while you scroll down (it was covering the words) and comes
+   back as soon as you scroll up. Desktop keeps it fixed. */
+function initHeaderTuck() {
+  const head = $(".site-header"); if (!head) return;
+  const mq = matchMedia("(max-width: 980px)");
+  let lastY = scrollY, ticking = false;
+  const update = () => {
+    ticking = false;
+    const y = scrollY, dy = y - lastY;
+    if (!mq.matches || y < head.offsetHeight) head.classList.remove("is-tucked");
+    else if (dy > 6) head.classList.add("is-tucked");
+    else if (dy < -6) head.classList.remove("is-tucked");
+    if (Math.abs(dy) > 6 || y < head.offsetHeight) lastY = y;
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  head.addEventListener("focusin", () => head.classList.remove("is-tucked"));
+}
+
 function initChapters() {
   const sections = $$("main section[id]:not(.kaleido)");
   const links = $$("[data-chapter]");
@@ -658,7 +677,7 @@ function initHero() {
     nameFrame.mark(slug);
     open.dataset.slug = slug;
     open.setAttribute("aria-label", `${L.openProject}: ${p.title}`);
-    $("#hero-plate").style.setProperty("--hero-accent", p.accent);
+    $("#hero-plate").closest(".hero").style.setProperty("--hero-accent", p.accent);
   };
   open.addEventListener("click", () => openProject(open.dataset.slug, open));
   setCaption(HERO[0][0]);
@@ -1301,6 +1320,7 @@ initReveals();          /* observers first, so the index can register with them 
 renderFilters();
 renderIndex();
 initChapters();
+initHeaderTuck();
 weather = initWeather();   /* before the hero, which sets the first colour */
 nameFrame = initNameFrame();
 initHero();

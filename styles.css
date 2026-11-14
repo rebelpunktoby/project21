@@ -141,6 +141,8 @@ h3 [lang="zh-Hant"] { margin-top: .2rem; font-size: .78em; font-weight: 400; col
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
 }
+.site-header { transition: transform .35s cubic-bezier(.2,.7,.2,1); }
+.site-header.is-tucked { transform: translateY(-100%); }
 .header-inner {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -217,10 +219,15 @@ h3 [lang="zh-Hant"] { margin-top: .2rem; font-size: .78em; font-weight: 400; col
 }
 h1 {
   display: grid; gap: .9rem;
-  max-width: 16ch;
   font-size: clamp(2.2rem, 4.4vw, 4.2rem);
   font-weight: 500; line-height: 1.1; letter-spacing: -.03em;
 }
+/* headline: two lines, no connector — the second drawn in outline, the
+   same voice as the outlined title inside a project */
+h1 .en { display: grid; }
+h1 .h-line { display: block; white-space: nowrap; }
+h1 .h-out { color: transparent; -webkit-text-stroke: max(1px, .022em) var(--ink); }
+@supports not (-webkit-text-stroke: 1px black) { h1 .h-out { color: var(--muted); } }
 h1 .zh {
   max-width: 26em;
   font-size: .44em; font-weight: 400; line-height: 1.5; letter-spacing: .04em; color: var(--muted);
@@ -769,6 +776,7 @@ body > footer .text-link { justify-self: end; }
   scrollbar-color: color-mix(in srgb, var(--accent) 55%, transparent) transparent;
 }
 .case-track:focus-visible { outline: 2px solid var(--seal); outline-offset: -4px; }
+.case-track > .case-head h2 { font-size: clamp(1.75rem, 2.6vw, 3.2rem); text-wrap: balance; }
 .case-track > .case-head {
   flex: 0 0 min(30rem, 34vw); align-self: center;
   display: flex; flex-direction: column; gap: 1.1rem;
@@ -939,6 +947,7 @@ html.no-js .reveal { opacity: 1; transform: none; }
 }
 
 @media (max-width: 980px) {
+  html { scroll-padding-top: 6.5rem; }   /* the two-row header, when it comes back on scroll-up */
   .header-inner {
     grid-template-columns: 1fr;
     row-gap: 0; padding-bottom: 0;
@@ -1009,6 +1018,7 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .case-body .seq img { animation: none !important; clip-path: none; transform: none !important; }
   .case-ghost { display: none; }
   .case-zoom, .case-sheet { animation: none; }
+  .site-header { transition: none; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
   .hero-tick { display: none; }
   .plate-peek { display: none; }
