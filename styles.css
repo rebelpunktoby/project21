@@ -416,16 +416,22 @@ button.hero-frame:focus-visible { outline: 2px solid var(--seal); outline-offset
 @media (max-width: 620px) { .kaleido { height: 50vh; } }
 
 /* =================================================================
-   ALT VIEWS — Field 場 and Deck 疊 (desktop, motion allowed).
-   The grid stays the default and the only view on phones.
+   FLOW 流 — the second way to browse the work (Grid 格 is the first).
+   Full Flow on pointer screens with motion: one plate in front, the
+   neighbours peeking at depth over the kaleidoscope. Lite Flow on
+   phones, touch and reduced motion: the same row as a snap strip.
    ================================================================= */
 .work-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .4rem 2rem; }
 .views { display: flex; gap: .2rem 1.1rem; padding-bottom: .35rem; }
 .views[hidden] { display: none; }
-body[data-view="field"] #project-index, body[data-view="deck"] #project-index { display: none; }
+body[data-view="flow"] #project-index { display: none; }
 .fx[hidden] { display: none; }
 
-/* shared: the psychedelic stage — full-strength kaleidoscope, hue drifting */
+.fx-flow {
+  position: relative; margin-inline: calc(var(--pad) * -1);
+  background: var(--ink-2); color: var(--paper);
+  --accent: var(--seal);
+}
 .fx-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; display: block;
   animation: fx-hue 26s linear infinite, fx-breathe 9s ease-in-out infinite alternate;
@@ -433,37 +439,76 @@ body[data-view="field"] #project-index, body[data-view="deck"] #project-index { 
 }
 @keyframes fx-hue { from { filter: hue-rotate(0deg) saturate(1.5) contrast(1.08); } to { filter: hue-rotate(360deg) saturate(1.5) contrast(1.08); } }
 @keyframes fx-breathe { from { transform: scale(1); } to { transform: scale(1.08); } }
-.fx-item { position: absolute; left: 0; top: 0; will-change: transform; }
 .fx-item .plate-frame { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent), 0 18px 60px -10px color-mix(in srgb, var(--accent) 55%, #000); }
-.fx-item .plate-foot { background: color-mix(in srgb, var(--ink-2) 78%, transparent); color: var(--paper); }
-.fx-item .plate-scope { color: rgba(242,240,234,.72); }
+.fx-item .plate-foot { display: none; }        /* the caption under the row carries the words */
+.fx-item::before { display: none; }
+.fx-item .plate-frame { aspect-ratio: 4 / 3; }
 
-/* Field: an open plane you drag through; plates at different depths */
-.fx-field {
-  position: relative; height: 88vh; overflow: hidden;
-  margin-inline: calc(var(--pad) * -1);
-  background: var(--ink-2); cursor: grab; touch-action: none; user-select: none;
+/* the stage */
+.fx-stage {
+  position: relative; height: max(32rem, 84vh); overflow: hidden;
+  perspective: 1600px; cursor: grab; touch-action: pan-y; user-select: none;
 }
-.fx-field.is-dragging { cursor: grabbing; }
-.fx-field .fx-item { width: var(--w); }
-.fx-field .fx-item:hover { z-index: 50 !important; }
+.fx-stage.is-dragging { cursor: grabbing; }
+.fx-stage .fx-item {
+  position: absolute; left: 50%; top: 46%; width: var(--cw, 40rem);
+  will-change: transform, opacity; backface-visibility: hidden;
+  transition: none;
+}
+.fx-stage .fx-item .plate-frame { background: color-mix(in srgb, var(--accent) 10%, var(--ink-2)); }
+.fx-stage .fx-item { cursor: pointer; }
+.fx-stage .fx-item.is-front .plate-frame { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 80%, transparent), 0 30px 90px -14px color-mix(in srgb, var(--accent) 70%, #000); }
 .fx-hint {
-  position: absolute; left: var(--pad); bottom: 1rem; z-index: 60;
+  position: absolute; left: var(--pad); top: 1rem; z-index: 60;
   font: 500 .66rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
-  color: rgba(242,240,234,.7); pointer-events: none;
+  color: rgba(242,240,234,.6); pointer-events: none;
 }
 .fx-hint [lang="zh-Hant"] { text-transform: none; margin-left: .4em; }
 
-/* Deck: a stack you scroll through; the top card flies away */
-.fx-deck { position: relative; margin-inline: calc(var(--pad) * -1); }
-.fx-deck-stage {
-  position: sticky; top: 0; height: 100vh; overflow: hidden;
-  background: var(--ink-2); perspective: 1400px;
+/* caption: ‹  NAME · category · 3 / 14  › */
+.fx-cap {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  padding: .4rem var(--pad) .9rem;
+  font: 500 .68rem/1.5 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: rgba(242,240,234,.85);
+  background: linear-gradient(transparent, color-mix(in srgb, var(--ink-2) 80%, transparent));
+  pointer-events: none;
 }
-.fx-deck .fx-item {
-  left: 50%; top: 50%; width: min(46vw, 40rem);
-  transform-origin: 50% 120%;
+.fx-cap-text {
+  justify-self: center; display: flex; flex-wrap: wrap; justify-content: center; gap: .2rem 1rem; text-align: center;
+  padding: .45rem .9rem; border-radius: 2px;
+  background: color-mix(in srgb, var(--ink-2) 72%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
+.fx-cap-name { color: var(--paper); }
+.fx-cap-name::after { content: "·"; margin-left: 1rem; opacity: .5; }
+.fx-cap-cat .zh { text-transform: none; letter-spacing: 0; margin-left: .4em; opacity: .75; }
+.fx-cap-n { opacity: .6; }
+.fx-arrow {
+  pointer-events: auto; min-width: 44px; min-height: 44px;
+  display: grid; place-items: center;
+  color: var(--paper); font: 400 1.6rem/1 var(--mono); opacity: .75; transition: opacity var(--t), transform var(--t);
+}
+.fx-arrow:hover { opacity: 1; transform: scale(1.1); }
+.fx-arrow i { font-style: normal; transform: translateY(-.08em); }
+
+.fx-flow:not(.fx-flow--lite) .fx-cap {
+  top: calc(46% + var(--cw, 40rem) * .375 + .7rem); bottom: auto;     /* right under the plate in front */
+  background: none;
+}
+/* lite Flow: snap strip */
+.fx-flow--lite { padding-bottom: 3.4rem; }
+.fx-snap {
+  display: flex; gap: 3vw; align-items: center;
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
+  padding: 1.6rem calc(50% - min(40vw, 20rem)) 1.2rem;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.fx-snap::-webkit-scrollbar { display: none; }
+.fx-snap .fx-item { flex: 0 0 min(80vw, 40rem); scroll-snap-align: center; scroll-snap-stop: always; }
+.fx-flow--lite .fx-cap { bottom: 0; padding-top: 0; }
+.fx-flow--lite .fx-item .plate-frame { background: color-mix(in srgb, var(--accent) 10%, var(--ink-2)); }
 
 /* =================================================================
    STUDIO
@@ -600,7 +645,7 @@ body > footer .text-link { justify-self: end; }
 
 .case-bar {
   position: sticky; top: 0; z-index: 10;
-  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 1rem clamp(1rem, 2.5vw, 2rem);
+  display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 1rem clamp(.8rem, 2.2vw, 2rem);
   padding: .85rem var(--pad);
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   border-bottom: 1px solid var(--line);
@@ -618,6 +663,20 @@ body > footer .text-link { justify-self: end; }
 }
 .case-close i { font-style: normal; font-size: 1.05rem; line-height: 1; }
 .case-close:hover { color: var(--seal); }
+/* ‹ Prev / Next › — swap the project in place, same spot in the bar wherever you are */
+.case-steps { display: inline-flex; align-items: center; gap: .2rem; }
+.case-step {
+  display: inline-flex; align-items: center; gap: .4rem;
+  min-height: 44px; padding: 0 .5rem;
+  font: 500 .72rem/1 var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink); transition: color var(--t), opacity var(--t);
+}
+.case-step [lang="zh-Hant"] { text-transform: none; }
+.case-step i { font-style: normal; font-size: 1.35rem; line-height: 1; color: var(--accent); transform: translateY(-.06em); }
+.case-step:hover { color: var(--seal); }
+.case-step[disabled] { opacity: .3; pointer-events: none; }
+.case-steps[hidden] { display: none; }
+.case-bar { padding-block: .35rem; min-height: 3.2rem; }
 /* Read 閱讀 — fixed in the bar, beside Close */
 .case-info {
   display: inline-flex; align-items: center; gap: .5rem;
@@ -828,6 +887,9 @@ body > footer .text-link { justify-self: end; }
   .case-track .m-cell img { height: 100%; max-height: none; }
   .m-cell::after { opacity: .85; transform: none; }       /* touch: show the hint */
 }
+/* swapping to the previous / next project: the strip dips and comes back */
+.case-track.is-swapping { opacity: 0; transition: none; }
+.case-track { transition: opacity .32s ease; }
 /* zoom */
 .case-zoom {
   position: absolute; inset: 0; z-index: 30;
@@ -874,6 +936,15 @@ body > footer .text-link { justify-self: end; }
 }
 
 @media (max-width: 620px) {
+  .case-bar { grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: .5rem; padding-inline: .6rem var(--pad); }
+  .case-bar-mark { width: 1rem; }
+  .case-step span { display: none; }
+  .case-step { min-width: 44px; padding: 0; justify-content: center; }
+  .case-step i { font-size: 1.6rem; }
+  .case-close > span { display: none; }                 /* × alone; the button's label still says Close 關閉 */
+  .case-close { min-width: 44px; min-height: 44px; justify-content: center; }
+  .case-close i { font-size: 1.5rem; }
+  .case-steps { gap: 0; }
   .case-sheet {
     left: 0; right: 0; top: auto; width: auto; max-height: 72dvh;
     border-left: 0; border-top: 2px solid var(--accent);
@@ -1019,6 +1090,9 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .case-ghost { display: none; }
   .case-zoom, .case-sheet { animation: none; }
   .site-header { transition: none; }
+  .fx-canvas { animation: none; display: none; }
+  .case-track { transition: none; }
+  .fx-snap { scroll-behavior: auto; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
   .hero-tick { display: none; }
   .plate-peek { display: none; }

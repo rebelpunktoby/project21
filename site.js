@@ -181,6 +181,7 @@ const L = {
 let filter = "all";
 let active = null;        // project currently open
 let lastTrigger = null;   // element to restore focus to on close
+let openedSlug = null;    // project the dialog was opened on (Prev/Next may move away from it)
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -364,6 +365,7 @@ function fillDialog(p) {
   const list = visibleProjects();
   const next = list.length > 1 ? list[(list.indexOf(p) + 1) % list.length] : null;
   dNext.hidden = !next;
+  $("#case-prev").disabled = $("#case-next").disabled = !next;
   if (next) {
     dNext.dataset.slug = next.slug;
     dNext.style.setProperty("--accent", next.accent);
@@ -393,6 +395,7 @@ function openProject(slug, trigger) {
   const p = PROJECTS.find(x => x.slug === slug);
   if (!p) return;
   if (trigger) lastTrigger = trigger;
+  openedSlug = slug;
 
   const source = trigger && (trigger.closest(".plate")?.querySelector(".plate-frame")
                           || (trigger.id === "hero-frame" ? trigger : null));
@@ -511,6 +514,8 @@ dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
     if (!dialog.open || e.altKey || e.ctrlKey || e.metaKey) return;
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "]" || (e.shiftKey && e.key === "ArrowRight")) { swapProject(1); e.preventDefault(); return; }
+    if (e.key === "[" || (e.shiftKey && e.key === "ArrowLeft"))  { swapProject(-1); e.preventDefault(); return; }
     const step = track.clientWidth * .8, smooth = prefersReduced() ? "auto" : "smooth";
     const native = e.target === track && (e.key === "ArrowLeft" || e.key === "ArrowRight");
     let dx = null;
@@ -524,6 +529,41 @@ dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
   });
 })();
 
+/* ‹ Prev / Next › — swap the project in place: no close and reopen. The strip
+   dips for a beat, comes back at its start with the new accent, ghost title
+   and progress (showProject does the reset; the case bar stays where it is). */
+function neighbourProject(dir) {
+  const list = visibleProjects(), i = list.indexOf(active);
+  if (list.length < 2 || i < 0) return null;
+  return list[(i + dir + list.length) % list.length];
+}
+function swapProject(dir) {
+  const p = neighbourProject(dir); if (!p) return;
+  const track = $("#case-track");
+  const go = () => { showProject(p); if (track) track.scrollLeft = 0; };
+  if (prefersReduced() || !track) { go(); return; }
+  track.classList.add("is-swapping");
+  requestAnimationFrame(() => { go(); requestAnimationFrame(() => track.classList.remove("is-swapping")); });
+}
+$("#case-prev").addEventListener("click", () => swapProject(-1));
+$("#case-next").addEventListener("click", () => swapProject(1));
+/* phone: a clear pull past the strip's last panel goes to the next project — once per touch, measured from the end */
+(() => {
+  const track = $("#case-track"); if (!track) return;
+  let ts = null;
+  track.addEventListener("touchstart", e => { ts = { x: e.touches[0].clientX, fired: false }; }, { passive: true });
+  track.addEventListener("touchmove", e => {
+    if (!ts || ts.fired) return;
+    const x = e.touches[0].clientX;
+    /* snap keeps the strip a little short of its true end, so "at the end" has some tolerance */
+    const atEnd = track.scrollLeft >= track.scrollWidth - track.clientWidth - 48;
+    if (!atEnd) { ts.x = x; return; }
+    if (ts.x - x > 90) { ts.fired = true; swapProject(1); }
+  }, { passive: true });
+  track.addEventListener("touchend", () => { ts = null; }, { passive: true });
+  track.addEventListener("touchcancel", () => { ts = null; }, { passive: true });
+})();
+
 const closeProject = () => { if (dialog.open) dialog.close(); };
 
 /* single cleanup path — also catches Escape */
@@ -532,19 +572,31 @@ dialog.addEventListener("close", () => {
   const cd = $("#case-dim"); if (cd) cd.classList.remove("is-on");
   caseDim.img = null; caseDim.slug = null;
   dBody.innerHTML = "";
+  const slug = active && active.slug;
   active = null;
-  if (lastTrigger && document.contains(lastTrigger)) lastTrigger.focus();
-  lastTrigger = null;
+  /* back to the project just left, in whichever Work view is showing. Opened from the
+     hero and never moved: the hero gets the focus back as before. */
+  let target = lastTrigger;
+  const fromHero = lastTrigger && lastTrigger.id === "hero-frame";
+  if (slug && (!fromHero || slug !== openedSlug)) {
+    let el = null;
+    if (fx.view === "flow" && fx.el) {
+      const it = flowFocusSlug(slug, true); el = it && it.el;
+      const r = fx.el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) fx.el.scrollIntoView({ block: "center", behavior: "auto" });
+    } else {
+      el = $(`#project-index [data-slug="${slug}"]`);
+      if (el) { const r = el.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) el.scrollIntoView({ block: "center", behavior: "auto" }); }
+    }
+    if (el) target = el;
+  }
+  if (target && document.contains(target)) { try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); } }
+  lastTrigger = null; openedSlug = null;
 });
 
 $$(".js-close").forEach(b => b.addEventListener("click", closeProject));
 dialog.addEventListener("click", e => { if (e.target === dialog) closeProject(); });
-dNext.addEventListener("click", () => {
-  if (!dNext.dataset.slug) return;
-  showProject(PROJECTS.find(x => x.slug === dNext.dataset.slug));
-  const tr = $("#case-track"); if (tr) tr.scrollTo({ left: 0, behavior: "auto" });
-  dialog.scrollTo({ top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
-});
+dNext.addEventListener("click", () => swapProject(1));
 
 /* CASE TEXT — Read 閱讀 sits in the case bar beside Close, so it is in the
    same place wherever you are in the strip. It slides a text sheet over the
@@ -568,7 +620,8 @@ const caseSheet = (() => {
     if (isOpen() && !e.target.closest("button, a")) set(false);
   });
   dialog.addEventListener("cancel", e => {
-    if (isOpen() && $("#case-zoom").hidden) { e.preventDefault(); set(false); btn.focus(); }
+    if (e.defaultPrevented) return;                      /* the zoom took this Esc */
+    if (isOpen()) { e.preventDefault(); set(false); btn.focus(); }
   });
   return { set };
 })();
@@ -941,154 +994,246 @@ function initDimensions() {
 }
 
 /* ------------------------------------------------------------------ *
- * 10f. ALT VIEWS — Field 場 and Deck 疊.
- * Desktop with motion only; the grid stays default. Both stage the
- * work on a full-strength kaleidoscope of the project in front, its
- * hue drifting (CSS filter on a half-resolution canvas). Field: drag
- * through an open plane, plates at depth with parallax. Deck: native
- * scroll flips through a stack. One rAF loop, only while on screen.
+ * 10f. FLOW 流 — the second way to browse the work.
+ * One project in focus, big; its neighbours peek at the sides, smaller
+ * and dimmed, stacked at depth, over a full-strength kaleidoscope of the
+ * project in front (hue drifting). Wheel, drag, ←/→, the side arrows or
+ * a click on a neighbour move the row; a click on the focused plate
+ * opens it. One rAF loop, only while on screen.
+ * Phones, touch screens and reduced motion get the "lite" Flow: the same
+ * row as a native scroll-snap strip, no canvas, no JS motion.
  * ------------------------------------------------------------------ */
-const fx = { view: "grid", on: false, raf: 0, el: null, cv: null, items: [], cam: { x: 0, y: 0, tx: 0, ty: 0 }, mouse: { x: 0, y: 0 }, front: null, io: null };
-const fxAllowed = () => !prefersReduced() && matchMedia("(min-width: 760px) and (hover: hover)").matches;
+const fx = { view: "grid", on: false, raf: 0, el: null, cv: null, items: [], q: 0, tq: 0, mouse: { x: 0, y: 0 }, front: null, io: null, lite: false, cw: 0 };
+const fxLite = () => prefersReduced() || !matchMedia("(min-width: 760px) and (hover: hover)").matches;
 
 function fxItem(p, cls = "") {
   const cov = sheet(p.slug).find(x => x.n === p.cover);
   return `<button class="plate fx-item ${cls}" type="button" data-slug="${p.slug}" style="--accent:${p.accent}" aria-label="${esc(L.openProject + ": " + p.title)}">
-  <span class="plate-frame"><img src="${thumb(p.slug)}" width="${cov.w}" height="${cov.h}" alt="${esc(p.title)} — title plate" decoding="async"></span>
+  <span class="plate-frame"><img src="${thumb(p.slug)}" width="${cov.w}" height="${cov.h}" alt="${esc(p.title)} — title plate" decoding="async" loading="lazy"></span>
   <span class="plate-foot"><span class="plate-name">${esc(p.title)}</span><span class="plate-scope">${pair(p.scope)}</span></span>
 </button>`;
 }
+const fxCapHTML = () => `<div class="fx-cap">
+  <button class="fx-arrow fx-arrow--prev" type="button" aria-label="Previous project 上一個項目"><i aria-hidden="true">‹</i></button>
+  <span class="fx-cap-text" aria-live="polite"><span class="fx-cap-name"></span><span class="fx-cap-cat"></span><span class="fx-cap-n"></span></span>
+  <button class="fx-arrow fx-arrow--next" type="button" aria-label="Next project 下一個項目"><i aria-hidden="true">›</i></button>
+</div>`;
 
 function fxRender() {
   const box = $("#fx"); if (!box) return;
   cancelAnimationFrame(fx.raf); fx.raf = 0;
   if (fx.io) { fx.io.disconnect(); fx.io = null; }
-  if (fx.view === "grid") { box.hidden = true; box.innerHTML = ""; fx.on = false; return; }
+  if (fx.view !== "flow") { box.hidden = true; box.innerHTML = ""; fx.on = false; fx.el = null; return; }
   const list = visibleProjects();
   box.hidden = false;
-  if (fx.view === "field") {
-    box.innerHTML = `<div class="fx-field"><canvas class="fx-canvas"></canvas>${list.map(p => fxItem(p)).join("")}
-      <p class="fx-hint">Drag to drift <span lang="zh-Hant">拖曳漫遊</span></p></div>`;
-    fx.el = $(".fx-field", box);
+  fx.lite = fxLite();
+  fx.front = null;
+  if (fx.lite) {
+    box.innerHTML = `<div class="fx-flow fx-flow--lite"><div class="fx-snap" tabindex="0" aria-label="Projects 項目">${list.map(p => fxItem(p)).join("")}</div>${fxCapHTML()}</div>`;
   } else {
-    box.innerHTML = `<div class="fx-deck" style="height:${(list.length + .6) * 70}vh"><div class="fx-deck-stage"><canvas class="fx-canvas"></canvas>${list.map(p => fxItem(p)).join("")}</div></div>`;
-    fx.el = $(".fx-deck", box);
+    box.innerHTML = `<div class="fx-flow"><div class="fx-stage"><canvas class="fx-canvas"></canvas>${list.map(p => fxItem(p)).join("")}</div>${fxCapHTML()}
+      <p class="fx-hint">Scroll, drag or ← → <span lang="zh-Hant">滾動、拖曳或方向鍵</span></p></div>`;
   }
+  fx.el = $(".fx-flow", box);
   fx.cv = $(".fx-canvas", box);
-  fx.items = $$(".fx-item", box).map((el, i) => ({ el, i, slug: el.dataset.slug }));
-  fx.items.forEach(({ el }) => el.addEventListener("click", e => {
-    if (fx.dragged) { e.preventDefault(); return; }
-    openProject(el.dataset.slug, el);
-  }));
-  if (fx.view === "field") fieldSetup(); else deckSetup();
+  fx.items = $$(".fx-item", box).map((el, i) => ({ el, i, slug: el.dataset.slug, p: list[i] }));
+  fx.q = fx.tq = Math.max(0, Math.min(list.length - 1, fx.tq | 0));
+  $(".fx-arrow--prev", box).addEventListener("click", () => flowStep(-1));
+  $(".fx-arrow--next", box).addEventListener("click", () => flowStep(1));
+  if (fx.lite) flowLiteSetup(); else flowSetup();
+  if (!list.length) return;
   fx.io = new IntersectionObserver(([e]) => {
     fx.on = e.isIntersecting;
-    if (fx.on && !fx.raf) fx.raf = requestAnimationFrame(fxLoop);
+    if (fx.on && !fx.lite && !fx.raf) fx.raf = requestAnimationFrame(fxLoop);
   });
   fx.io.observe(fx.el);
+  if (fx.lite) flowLiteSync(true); else flowFront(fx.items[fx.tq]);
 }
 
-/* ---- Field: a loose spiral of plates on a plane, each at its own depth */
-function fieldSetup() {
-  const n = fx.items.length, field = fx.el;
-  fx.items.forEach((it, i) => {
-    const a = i * 2.39996, r = 260 + 120 * Math.sqrt(i) * 2.1;        /* golden-angle spiral */
-    it.x = Math.cos(a) * r; it.y = Math.sin(a) * r * .62;
-    it.z = .55 + ((i * 37) % 10) / 14;                                  /* depth .55 – 1.2 */
-    it.el.style.setProperty("--w", `${Math.round(250 * it.z)}px`);
-    it.el.style.zIndex = Math.round(it.z * 20);
-  });
-  fx.cam = { x: 0, y: 0, tx: 0, ty: 0 };
+/* the caption under the focused plate: name · category · 3 / 14 */
+function flowFront(it) {
+  if (!it || it.slug === fx.front) return;
+  fx.front = it.slug;
+  const cap = $(".fx-cap", fx.el); if (!cap) return;
+  $(".fx-cap-name", cap).textContent = it.p.title;
+  $(".fx-cap-cat", cap).innerHTML = pair(L.categories[it.p.category]);
+  $(".fx-cap-n", cap).textContent = `${it.i + 1} / ${fx.items.length}`;
+  fx.el.style.setProperty("--accent", it.p.accent);
+  setKaleidoSource(it.slug); weather.set(it.slug); setThread(it.p.accent);
+}
+
+function flowSize() {
+  const stage = fx.el && $(".fx-stage", fx.el); if (!stage) return;
+  fx.cw = Math.min(stage.getBoundingClientRect().width * .44, 640);
+  fx.el.style.setProperty("--cw", fx.cw.toFixed(0) + "px");
+}
+/* move the row by whole projects */
+function flowStep(d) {
+  const n = fx.items.length; if (!n) return;
+  flowGo(Math.max(0, Math.min(n - 1, Math.round(fx.tq) + d)));
+}
+function flowGo(i, instant) {
+  if (!fx.items.length || !fx.el) return;
+  i = Math.max(0, Math.min(fx.items.length - 1, i));
+  fx.tq = i;
+  if (fx.lite) {
+    const snap = $(".fx-snap", fx.el), el = fx.items[i].el;
+    if (snap && el) snap.scrollTo({ left: el.offsetLeft - (snap.clientWidth - el.offsetWidth) / 2, behavior: instant || prefersReduced() ? "auto" : "smooth" });
+  } else if (instant || prefersReduced()) {
+    fx.q = i;
+  }
+}
+/* which project is in focus — used when a case closes, so the row shows the project just left */
+function flowFocusSlug(slug, instant) {
+  const it = fx.items.find(x => x.slug === slug);
+  if (it) flowGo(it.i, instant);
+  return it;
+}
+
+/* ---- full Flow: pointer, wheel, keys */
+function flowSetup() {
+  const stage = $(".fx-stage", fx.el), n = fx.items.length;
+  flowSize();
+
+  /* click: the focused plate opens; a neighbour comes to the front */
+  fx.items.forEach(it => it.el.addEventListener("click", e => {
+    if (fx.dragged) { e.preventDefault(); return; }
+    if (Math.abs(it.i - fx.tq) < .5) openProject(it.slug, it.el);
+    else flowGo(it.i);
+  }));
+
+  /* drag: the row follows the pointer; release snaps to the nearest plate (a flick carries one further) */
   let drag = null;
-  field.addEventListener("pointerdown", e => {
-    drag = { x: e.clientX, y: e.clientY, cx: fx.cam.tx, cy: fx.cam.ty, moved: 0, id: e.pointerId };
-    fx.dragged = false;              /* capture only once it's really a drag, so a click still reaches the plate */
+  stage.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    drag = { x: e.clientX, q: fx.q, moved: 0, id: e.pointerId, t: performance.now(), vx: 0, lx: e.clientX };
+    fx.dragged = false;
   });
-  field.addEventListener("pointermove", e => {
-    const r = field.getBoundingClientRect();
+  stage.addEventListener("pointermove", e => {
+    const r = stage.getBoundingClientRect();
     fx.mouse.x = (e.clientX - r.left) / r.width - .5; fx.mouse.y = (e.clientY - r.top) / r.height - .5;
     if (!drag) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
+    const dx = e.clientX - drag.x;
+    drag.moved = Math.max(drag.moved, Math.abs(dx));
     if (drag.moved > 6 && !fx.dragged) {
-      fx.dragged = true; field.classList.add("is-dragging");
-      try { field.setPointerCapture(drag.id); } catch (_) {}
+      fx.dragged = true; stage.classList.add("is-dragging");
+      try { stage.setPointerCapture(drag.id); } catch (_) {}
     }
-    const lim = 260 + 120 * Math.sqrt(n) * 2.1;
-    fx.cam.tx = Math.max(-lim, Math.min(lim, drag.cx - dx * 1.4));
-    fx.cam.ty = Math.max(-lim * .62, Math.min(lim * .62, drag.cy - dy * 1.4));
+    if (!fx.dragged) return;
+    const now = performance.now();
+    drag.vx = (e.clientX - drag.lx) / Math.max(1, now - drag.t); drag.lx = e.clientX; drag.t = now;
+    fx.q = fx.tq = Math.max(-.4, Math.min(n - .6, drag.q - dx / (fx.cw * .74)));
   });
-  const end = () => { drag = null; field.classList.remove("is-dragging"); setTimeout(() => fx.dragged = false, 0); };
-  /* a drag that ends over a plate must not open it */
-  field.addEventListener("click", e => { if (fx.dragged) { e.stopPropagation(); e.preventDefault(); } }, true);
-  field.addEventListener("pointerup", end); field.addEventListener("pointercancel", end);
+  const end = () => {
+    if (!drag) return;
+    if (fx.dragged) {
+      let to = Math.round(fx.q);
+      if (Math.abs(drag.vx) > .6) to = Math.round(fx.q + (drag.vx < 0 ? .5 : -.5));
+      flowGo(to);
+    }
+    drag = null; stage.classList.remove("is-dragging"); setTimeout(() => fx.dragged = false, 0);
+  };
+  stage.addEventListener("click", e => { if (fx.dragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+  stage.addEventListener("dragstart", e => e.preventDefault());        /* the browser's own image drag would cancel the pointer */
+  stage.addEventListener("pointerup", end); stage.addEventListener("pointercancel", end); stage.addEventListener("lostpointercapture", end);
+
+  /* wheel / trackpad: a notch moves one project; at either end the page scrolls on as usual */
+  let acc = 0, lastStep = 0, accT = 0;
+  stage.addEventListener("wheel", e => {
+    const now = performance.now();
+    if (now - accT > 220) acc = 0; accT = now;
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    const k = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? 400 : 1;
+    const dir = Math.sign(d), at = Math.round(fx.tq);
+    if ((dir < 0 && at <= 0) || (dir > 0 && at >= n - 1)) return;      /* let the page take it */
+    e.preventDefault();
+    acc += d * k;
+    if (Math.abs(acc) > 70 && now - lastStep > 300) { flowStep(dir); acc = 0; lastStep = now; }
+  }, { passive: false });
+
+  /* tabbing onto a plate brings it to the front, so the keyboard sees what it has */
+  fx.items.forEach(it => it.el.addEventListener("focus", () => {
+    if (it.el.matches(":focus-visible") && Math.abs(it.i - fx.tq) >= .5) flowGo(it.i);   /* keyboard only: a mouse press must not promote before its click lands */
+  }));
 }
 
-/* ---- Deck: scroll position → which card is on top */
-function deckSetup() { /* positions are computed each frame from scroll */ }
+/* ---- lite Flow: native snap strip; the caption follows the card nearest the middle */
+function flowLiteSetup() {
+  const snap = $(".fx-snap", fx.el);
+  fx.items.forEach(it => it.el.addEventListener("click", () => openProject(it.slug, it.el)));
+  let tick = false;
+  snap.addEventListener("scroll", () => { if (!tick) { tick = true; requestAnimationFrame(() => { tick = false; flowLiteSync(); }); } }, { passive: true });
+  snap.addEventListener("keydown", e => {
+    if (e.target !== snap) return;
+    if (e.key === "ArrowRight") { flowStep(1); e.preventDefault(); }
+    else if (e.key === "ArrowLeft") { flowStep(-1); e.preventDefault(); }
+  });
+}
+function flowLiteSync(initial) {
+  const snap = $(".fx-snap", fx.el); if (!snap || !fx.items.length) return;
+  if (initial) { flowGo(fx.tq, true); flowFront(fx.items[fx.tq]); return; }
+  const mid = snap.scrollLeft + snap.clientWidth / 2;
+  let best = null, bd = Infinity;
+  for (const it of fx.items) { const d = Math.abs(it.el.offsetLeft + it.el.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = it; } }
+  if (best) { fx.tq = best.i; flowFront(best); }
+}
 
 function fxLoop(t) {
   fx.raf = 0;
-  if (!fx.on || fx.view === "grid") return;
-  let front = null;
-  if (fx.view === "field") {
-    const r = fx.el.getBoundingClientRect(), cx = r.width / 2, cy = r.height / 2;
-    fx.cam.x += (fx.cam.tx + fx.mouse.x * 120 - fx.cam.x) * .08;
-    fx.cam.y += (fx.cam.ty + fx.mouse.y * 80 - fx.cam.y) * .08;
-    let best = Infinity;
-    for (const it of fx.items) {
-      const bob = Math.sin(t * .0006 + it.i * 1.7) * 10 * it.z;
-      const sx = cx + (it.x - fx.cam.x) * it.z, sy = cy + (it.y - fx.cam.y) * it.z + bob;
-      const w = 250 * it.z;
-      it.el.style.transform = `translate3d(${(sx - w / 2).toFixed(1)}px, ${(sy - w * .4).toFixed(1)}px, 0) rotate(${(Math.sin(t * .0003 + it.i) * 1.5).toFixed(2)}deg)`;
-      const d = Math.hypot(sx - cx, sy - cy) / it.z;
-      if (d < best) { best = d; front = it; }
-    }
-  } else {
-    const r = fx.el.getBoundingClientRect(), n = fx.items.length;
-    const q = Math.max(0, Math.min(n - 1, (-r.top) / (r.height - innerHeight) * (n - .4)));
-    for (const it of fx.items) {
-      const d = it.i - q;
-      let tf, op = 1;
-      if (d < -1.2) { op = 0; tf = "translate3d(-50%, -160%, 0)"; }
-      else if (d < 0) {                     /* flying away: up, tipping back, turning */
-        tf = `translate3d(-50%, calc(-50% + ${(d * 95).toFixed(1)}vh), ${(-d * 200).toFixed(0)}px) rotateX(${(-d * 62).toFixed(1)}deg) rotateZ(${(d * 9).toFixed(1)}deg)`;
-        op = 1 + d * .85;
-      } else {                              /* waiting in the stack */
-        tf = `translate3d(-50%, calc(-50% + ${(d * 22).toFixed(1)}px), ${(-d * 70).toFixed(0)}px) rotateZ(${(Math.sin(it.i * 2.3) * 4 * Math.min(1, d)).toFixed(2)}deg)`;
-        op = d > 4 ? 0 : 1 - d * .12;
-      }
-      it.el.style.transform = tf; it.el.style.opacity = op.toFixed(3);
-      it.el.style.zIndex = String(100 - it.i);
-      it.el.style.pointerEvents = d > -0.5 && d < 0.5 ? "auto" : "none";
-    }
-    front = fx.items[Math.min(n - 1, Math.round(q))];
+  if (!fx.on || fx.view !== "flow" || fx.lite) return;
+  const n = fx.items.length, cw = fx.cw, spread = cw * .74;
+  fx.q += (fx.tq - fx.q) * .13;
+  if (Math.abs(fx.tq - fx.q) < .001) fx.q = fx.tq;
+  let front = null, bd = Infinity;
+  for (const it of fx.items) {
+    const d = it.i - fx.q, ad = Math.abs(d), c = Math.min(ad, 3);
+    if (ad > 2.7) { it.el.style.opacity = "0"; it.el.style.pointerEvents = "none"; it.el.style.visibility = "hidden"; continue; }
+    it.el.style.visibility = "";
+    const bob = Math.sin(t * .0007 + it.i * 1.9) * 5;
+    const x = d * spread + fx.mouse.x * 14 * (1 - c * .25);
+    const s = 1 - c * .14, op = ad < .5 ? 1 : Math.max(0, 1 - c * .42);      /* 1 → .58 → .16: the row falls away into the dark */
+    const rz = Math.sin(t * .0004 + it.i) * .8 * Math.min(1, ad);
+    it.el.style.transform = `translate3d(calc(-50% + ${x.toFixed(1)}px), calc(-50% + ${bob.toFixed(1)}px), ${(-c * 160).toFixed(0)}px) rotateY(${(-d * 7).toFixed(1)}deg) rotateZ(${rz.toFixed(2)}deg) scale(${s.toFixed(3)})`;
+    it.el.style.opacity = op.toFixed(3);
+    it.el.style.zIndex = String(100 - Math.round(ad * 10));
+    it.el.style.pointerEvents = "auto";
+    it.el.classList.toggle("is-front", ad < .5);
+    if (ad < bd) { bd = ad; front = it; }
   }
-  if (front && front.slug !== fx.front) { fx.front = front.slug; setKaleidoSource(front.slug); weather.set(front.slug); setThread(front.el.style.getPropertyValue("--accent")); }
-  /* the stage: full kaleidoscope, always turning, faster while you move */
+  if (front) flowFront(front);
   const p = .5 + Math.sin(t * .00017) * .3;
-  const more = kaleidoPaint(fx.cv, t, { scale: .5, p, lens: true, rot: t * .00009 + fx.cam.x * .0012 + scrollY * .0006 });
+  const more = kaleidoPaint(fx.cv, t, { scale: .5, p, lens: true, rot: t * .00009 + fx.q * .35 + scrollY * .0006 });
   if (!more && !kal.raf && !dim.raf) kal.prev = null;
   fx.raf = requestAnimationFrame(fxLoop);
 }
 
 function initViews() {
   const box = $("#views"); if (!box) return;
-  const sync = () => {
-    const ok = fxAllowed();
-    box.hidden = !ok;
-    if (!ok && fx.view !== "grid") setView("grid");
-  };
   const setView = v => {
     fx.view = v; document.body.dataset.view = v;
     $$("[data-view]", box).forEach(b => { const on = b.dataset.view === v; b.classList.toggle("is-active", on); b.setAttribute("aria-pressed", String(on)); });
     fxRender();
-    if (v !== "grid") $("#work").scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth" });
+    /* bring the whole row into view, controls just above it */
+    if (v !== "grid" && fx.el) fx.el.scrollIntoView({ block: "end", behavior: prefersReduced() ? "auto" : "smooth" });
   };
   $$("[data-view]", box).forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
-  addEventListener("resize", sync);
+  /* ← → while the row is on screen and nothing modal is open (registered once; the row is rebuilt often) */
+  document.addEventListener("keydown", e => {
+    if (fx.view !== "flow" || !fx.el || !fx.on || dialog.open || e.altKey || e.ctrlKey || e.metaKey) return;
+    const tag = e.target.tagName; if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (fx.lite && e.target.closest(".fx-snap") !== null) return;        /* the strip handles its own keys */
+    if (e.key === "ArrowRight") { flowStep(1); e.preventDefault(); }
+    else if (e.key === "ArrowLeft") { flowStep(-1); e.preventDefault(); }
+  });
+  /* resize: plates follow the stage; full ↔ lite follows the screen, rebuilt only when the kind changes */
+  let rt = 0;
+  addEventListener("resize", () => {
+    if (fx.view !== "flow" || !fx.el) return;
+    if (fx.lite) flowGo(fx.tq, true); else flowSize();
+    clearTimeout(rt); rt = setTimeout(() => { if (fx.view === "flow" && fx.lite !== fxLite()) fxRender(); }, 200);
+  });
+  box.hidden = false;
   document.body.dataset.view = "grid";
-  sync();
 }
 
 /* ------------------------------------------------------------------ *

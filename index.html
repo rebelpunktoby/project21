@@ -72,10 +72,9 @@
           <h2 id="work-title">Work <span lang="zh-Hant">作品</span></h2>
           <div class="work-controls">
             <div class="chips" id="filters" role="group" aria-label="Filter projects by category 依類別篩選項目"></div>
-            <div class="views" id="views" role="group" aria-label="View 檢視" hidden>
+            <div class="views" id="views" role="group" aria-label="View 檢視">
               <button class="chip is-active" type="button" data-view="grid" aria-pressed="true">Grid <span lang="zh-Hant">格</span></button>
-              <button class="chip" type="button" data-view="field" aria-pressed="false">Field <span lang="zh-Hant">場</span></button>
-              <button class="chip" type="button" data-view="deck" aria-pressed="false">Deck <span lang="zh-Hant">疊</span></button>
+              <button class="chip" type="button" data-view="flow" aria-pressed="false">Flow <span lang="zh-Hant">流</span></button>
             </div>
           </div>
         </div>
@@ -208,6 +207,10 @@
           <span class="case-bar-mark" aria-hidden="true"></span>
           <span class="case-bar-title" id="d-bar-title"></span>
           <span class="case-progress" id="case-progress" aria-hidden="true"></span>
+          <span class="case-steps">
+            <button class="case-step" id="case-prev" type="button" aria-label="Previous project 上一個項目"><i aria-hidden="true">‹</i><span>Prev <span lang="zh-Hant">上一個</span></span></button>
+            <button class="case-step" id="case-next" type="button" aria-label="Next project 下一個項目"><span>Next <span lang="zh-Hant">下一個</span></span><i aria-hidden="true">›</i></button>
+          </span>
           <button class="case-info" id="case-info" type="button" aria-expanded="false" aria-controls="case-sheet">
             <span class="ci-open">Read <span lang="zh-Hant">閱讀</span></span>
             <span class="ci-shut">Hide <span lang="zh-Hant">收起</span></span>
