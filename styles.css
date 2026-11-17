@@ -586,7 +586,30 @@ body[data-view="flow"] #project-index { display: none; }
 /* =================================================================
    CONTACT
    ================================================================= */
-.chapter--contact { border-top: 1px solid var(--line); }
+.chapter--contact { border-top: 1px solid var(--line); overflow-x: clip; }
+/* the call: two lines that slide past each other as the section arrives,
+   the outlined one in the colour of the last work you looked at */
+.contact-head { display: grid; justify-content: stretch; gap: 1.1rem; }
+.contact-eyebrow { font: 500 .7rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.contact-eyebrow [lang="zh-Hant"] { text-transform: none; letter-spacing: 0; margin-left: .4em; }
+.contact-call { display: grid; gap: .1rem; }
+.contact-call .ct-line {
+  display: block; white-space: nowrap;
+  font-size: clamp(3rem, 9vw, 8.5rem); font-weight: 500; line-height: .92; letter-spacing: -.05em;
+}
+.contact-call .ct-out {
+  color: transparent; -webkit-text-stroke: max(1px, .018em) var(--thread, var(--seal));
+  transition: -webkit-text-stroke-color 1.2s ease;
+  padding-left: .55em;
+}
+@supports not (-webkit-text-stroke: 1px black) { .contact-call .ct-out { color: var(--muted); } }
+.contact-call .ct-zh { margin-top: .9rem; font-size: clamp(1rem, 1.7vw, 1.4rem); font-weight: 400; letter-spacing: .06em; color: var(--muted); }
+@supports (animation-timeline: view()) {
+  .contact-call .ct-line { animation: ct-in 1ms linear both; animation-timeline: view(); animation-range: entry 0% cover 45%; }
+  .contact-call .ct-out { animation-name: ct-in-r; }
+  @keyframes ct-in   { from { transform: translateX(-9%); } to { transform: none; } }
+  @keyframes ct-in-r { from { transform: translateX(14%); } to { transform: none; } }
+}
 .contact {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5rem clamp(1.5rem, 4vw, 4rem);
@@ -862,6 +885,7 @@ body > footer .text-link { justify-self: end; }
 .case-track .seq img { height: 100%; width: auto; max-width: none; }
 .case-track .seq--full { height: 100%; margin: 0; }
 .case-track .seq--opening { margin: 0; }
+.case-track .hang > .seq--full { height: 62%; }
 .case-track .seq--pair { display: flex; gap: var(--gap); height: 78%; }
 .case-track .pair-cell { height: 100%; flex: 0 0 auto; }
 .case-track .pair-cell img { height: 100%; width: auto; }
@@ -874,8 +898,47 @@ body > footer .text-link { justify-self: end; }
 .case-track > .case-foot .case-return { border-left: 0; }
 .case-track::after { content: ""; flex: 0 0 1px; }       /* end padding that flex scrollers otherwise drop */
 
+/* the hung wall -------------------------------------------------------
+   each piece hangs in its own bay; the bay is the full strip height and
+   the piece takes a share of it, top, middle or bottom. Numbers sit in
+   the free space beside the piece, like a show label. */
+.case-track > .case-body { align-items: stretch; gap: clamp(1.6rem, 3.2vw, 3.6rem); }
+.hang { position: relative; flex: 0 0 auto; height: 100%; display: flex; flex-direction: column; min-width: 0; }
+.case-track .hang > .seq, .case-track .hang-cell > .seq { width: auto; flex: 0 0 auto; margin: 0; }
+.hang--open { justify-content: center; }
+.hang--open > .seq  { height: 80%; }
+.hang--big  { justify-content: center; }
+.hang--big  > .seq  { height: 82%; }
+.hang--mid  { justify-content: center; }
+.hang--mid  > .seq  { height: 62%; }
+.hang--high { justify-content: flex-start; }
+.hang--high::before, .hang--low::after, .hang--pair::before, .hang--pair::after { content: ""; flex: 0 0 3%; }   /* spacers: % of the bay's height (padding % would follow its width) */
+.hang--high > .seq  { height: 54%; }
+.hang--low  { justify-content: flex-end; }
+.hang--low  > .seq  { height: 56%; }
+.hang--pair { justify-content: flex-start; }
+.hang--pair > .hang-cell:last-child { margin-top: auto; }       /* all the free height goes between the two, room for both labels */
+.hang-cell  { position: relative; height: 40%; display: flex; }
+.hang-cell > .seq { height: 100%; }
+.hang--pair > .hang-cell:last-child { align-self: flex-end; margin-left: clamp(2rem, 6vw, 6rem); }
+.hang--pair > .hang-cell:first-child { align-self: flex-start; }
+.hang-n {
+  position: absolute; left: 0; z-index: 1; white-space: nowrap; pointer-events: none;
+  font: 500 .66rem/1 var(--mono); letter-spacing: .12em; color: color-mix(in srgb, var(--ink) 55%, var(--muted));
+}
+.hang-n i { font-style: normal; opacity: .55; }
+.hang--big > .hang-n, .hang--mid > .hang-n, .hang--open > .hang-n { bottom: calc(9% - 1.2rem); }
+.hang--big > .hang-n { bottom: calc(9% - 1.4rem); }
+.hang--mid > .hang-n { bottom: calc(19% - 1.4rem); }
+.hang--open > .hang-n { bottom: calc(10% - 1.4rem); }
+.hang--high > .hang-n { top: calc(3% + 54% + .7rem); }
+.hang--low > .hang-n  { top: calc(41% - 1.6rem); }
+.hang-cell > .hang-n  { top: auto; bottom: -1.3rem; }
+.hang--pair > .hang-cell:first-child > .hang-n { bottom: -1.3rem; }
+.hang--pair > .hang-cell:last-child > .hang-n { top: -1.3rem; bottom: auto; }
+
 /* puzzles: same-shaped detail/product shots share one panel -------- */
-.case-track .seq--mosaic { display: grid; gap: 8px; height: 78%; width: auto; flex: 0 0 auto; }
+.case-track .seq--mosaic { display: grid; gap: 8px; width: auto; flex: 0 0 auto; }
 .seq--m2 { grid-template-columns: 1fr 1fr; }
 .seq--m3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
 .seq--m3 > .m-cell:first-child { grid-row: span 2; }
@@ -933,6 +996,21 @@ body > footer .text-link { justify-self: end; }
   }
   @keyframes seq-drift { from { transform: translateX(5%) scale(1.1); } to { transform: translateX(-5%) scale(1.1); } }
 }
+@supports (animation-timeline: view()) {
+  @media (max-width: 620px) {
+    .case-body .seq:not(.seq--opening) img {
+      animation: var(--wipe, seq-wipe-y) 1ms linear forwards, seq-drift-y 1ms linear both;
+      animation-timeline: view(block), view(block);
+      animation-range: entry 0% entry 55%, cover 0% cover 100%;
+    }
+    .case-body > .hang:not(.hang--open) {
+      animation: hang-rise 1ms linear both; animation-timeline: view(block); animation-range: entry 0% entry 70%;
+    }
+    .case-body > .hang--high { --hx: -6%; } .case-body > .hang--low { --hx: 6%; }
+    @keyframes hang-rise { from { opacity: .25; transform: translate3d(var(--hx, 0), 2.4rem, 0) scale(.94); } to { opacity: 1; transform: none; } }
+    @keyframes seq-drift-y { from { transform: translateY(5%) scale(1.1); } to { transform: translateY(-5%) scale(1.1); } }
+  }
+}
 /* 2. ghost title: the project's name, huge and outlined, sliding slower than the images */
 .case-ghost {
   position: absolute; left: 0; bottom: 4vh; z-index: 0; pointer-events: none;
@@ -964,13 +1042,27 @@ body > footer .text-link { justify-self: end; }
     animation-name: sheet-up;
   }
   @keyframes sheet-up { from { transform: translateY(100%); opacity: .4; } }
-  .case-track { scroll-snap-type: x mandatory; gap: 1rem; padding: 0 7vw; }
-  .case-track > .case-head, .case-track > .case-foot { flex-basis: 86vw; scroll-snap-align: center; }
-  .case-track .seq, .case-track .pair-cell { height: auto; width: 86vw; scroll-snap-align: center; }
-  .case-track .seq img, .case-track .pair-cell img { width: 100%; height: auto; max-height: 72dvh; object-fit: contain; }
-  .case-track .seq--pair { display: contents; }
-  .case-track .seq--full { height: auto; }
-  .case-track .seq--pause { display: none; }
+  /* phones: the wall reads downwards — pieces hang left, right, full; pairs side by side, staggered */
+  .case-track { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto;
+    overscroll-behavior-y: contain; gap: 2.4rem; padding: 1.4rem 5vw 2.5rem; scroll-snap-type: none; }
+  .case-track > .case-head { flex: 0 0 auto; max-height: none; overflow: visible; padding: 1.3rem 1.1rem; }
+  .case-track > .case-body { flex-direction: column; align-items: stretch; height: auto; gap: 2.6rem; }
+  .case-track > .case-foot { flex: 0 0 auto; }
+  .case-track::after { flex-basis: 1px; }
+  .hang { height: auto; padding: 0 !important; }
+  .hang::before, .hang::after { display: none; }
+  .case-track .hang > .seq, .case-track .hang-cell > .seq { height: auto !important; width: 100%; }
+  .case-track .seq img { width: 100%; height: auto; max-height: none; }
+  .case-track .seq--mosaic { height: auto; width: 100%; gap: 5px; }
+  .hang--high { width: 82%; align-self: flex-start; }
+  .hang--low  { width: 82%; align-self: flex-end; }
+  .hang--pair { flex-direction: row; align-items: flex-start; gap: 4vw; }
+  .hang-cell  { width: 48%; height: auto; flex-direction: column; }
+  .hang--pair > .hang-cell:last-child { margin: 3.2rem 0 0 !important; align-self: auto; }
+  .hang-n, .hang--big > .hang-n, .hang--mid > .hang-n, .hang--open > .hang-n, .hang--high > .hang-n, .hang--low > .hang-n,
+  .hang-cell > .hang-n, .hang--pair > .hang-cell:first-child > .hang-n, .hang--pair > .hang-cell:last-child > .hang-n {
+    position: static; order: 2; margin-top: .55rem; }
+  .hang--low > .hang-n { text-align: right; }
 }
 
 /* =================================================================
@@ -1106,6 +1198,8 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .hero-frame img.was-on { opacity: 0; }
   .case-body .seq img { animation: none !important; clip-path: none; transform: none !important; }
   .case-ghost { display: none; }
+  .contact-call .ct-line { animation: none !important; transform: none !important; }
+  .case-body > .hang { animation: none !important; opacity: 1 !important; transform: none !important; }
   .case-zoom, .case-sheet { animation: none; }
   .site-header { transition: none; }
   .fx-canvas { animation: none; display: none; }

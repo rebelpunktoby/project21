@@ -302,25 +302,30 @@ function buildSequence(p) {
   return { opening, blocks };
 }
 
-/* Horizontal case sequence. Wide "full" images stand alone. Runs of
-   same-shaped images (portrait/square, or landscape) are grouped in a
-   rhythm — one big (focus), then a 2×2 puzzle, then a 1+2 puzzle,
-   repeat — so detail and product shots share a panel instead of each
-   taking a whole screen. Puzzle cells crop to fill; tap to see whole. */
+/* The project as a hung wall. Same grouping as before — runs of
+   same-shaped images share a puzzle (one big, then 2×2, then 1+2), wide
+   "full" shots stand alone — but the pieces are hung like a show rather
+   than lined up: big in the middle, then two small stacked and staggered,
+   then one hung low, one hung high. Each piece carries its image number.
+   Desktop reads it sideways; phones read it downwards, staggered left and
+   right. Puzzle cells crop to fill; tap to see the whole image. */
 function sequenceHTML(p) {
   const all = sheet(p.slug);
   const opening = all.find(x => x.n === p.cover);
   const rest = all.filter(x => x.n !== p.cover);
+  const total = all.length, pad = k => String(k).padStart(2, "0");
   let n = 0;
   const alt = () => `${p.title} — case study image ${++n}`;
   const fam = x => { const k = classify(x.r); return k === "full" ? "full" : k === "wide" ? "land" : "port"; };
-  const single = it => `<figure class="seq seq--${classify(it.r)}">${imgTag(p.slug, it, alt(), n === 0)}</figure>`;
+  const single = it => ({ kind: classify(it.r), nums: [it.n],
+    html: `<figure class="seq seq--${classify(it.r)}">${imgTag(p.slug, it, alt(), n === 0)}</figure>` });
   const mosaic = (items, land) => {
     const r = items.reduce((s, x) => s + x.r, 0) / items.length;
     const stack = land && items.length === 2;                  /* landscape pair: one above the other */
     const ratio = items.length === 4 ? r : items.length === 3 ? r * 1.5 : stack ? r / 2 : r * 2;
-    return `<div class="seq seq--mosaic seq--m${items.length}${stack ? "v" : ""}" style="aspect-ratio:${ratio.toFixed(3)}">${items.map(it =>
-      `<button class="m-cell" type="button" data-zoom="${src(p.slug, it.n)}" aria-label="${esc("View larger 放大檢視")}">${imgTag(p.slug, it, alt(), false)}</button>`).join("")}</div>`;
+    return { kind: "mosaic", nums: items.map(x => x.n),
+      html: `<div class="seq seq--mosaic seq--m${items.length}${stack ? "v" : ""}" style="aspect-ratio:${ratio.toFixed(3)}">${items.map(it =>
+      `<button class="m-cell" type="button" data-zoom="${src(p.slug, it.n)}" aria-label="${esc("View larger 放大檢視")}">${imgTag(p.slug, it, alt(), false)}</button>`).join("")}</div>` };
   };
   const groupRun = (run, land) => {
     const sizes = land ? [1, 4, 2] : [1, 4, 3], out = [];
@@ -331,15 +336,43 @@ function sequenceHTML(p) {
     }
     return out;
   };
-  const panels = [];
+  const pieces = [];
   for (let i = 0; i < rest.length;) {
     /* wide and full-width shots form one landscape family */
     const f = fam(rest[i]) === "port" ? "port" : "land";
     let j = i; while (j < rest.length && (fam(rest[j]) === "port" ? "port" : "land") === f) j++;
-    panels.push(...groupRun(rest.slice(i, j), f === "land"));
+    pieces.push(...groupRun(rest.slice(i, j), f === "land"));
     i = j;
   }
-  return `<figure class="seq seq--opening">${imgTag(p.slug, opening, `${p.title} — title plate`, true)}</figure>` + panels.join("");
+  /* hang: big · pair (two singles, stacked and staggered) · low · high · repeat.
+     Puzzles and panoramas never go into a pair; a panorama hangs mid-height. */
+  const label = nums => {
+    const a = Math.min(...nums), b = Math.max(...nums);
+    return `<span class="hang-n" aria-hidden="true">${a === b ? pad(a) : pad(a) + "–" + pad(b)}<i> / ${pad(total)}</i></span>`;
+  };
+  const hang = (cls, inner, nums) => `<div class="hang hang--${cls}">${label(nums)}${inner}</div>`;
+  const out = [];
+  const ROT = ["big", "pair", "low", "high"];
+  let r = 0, last = "";
+  for (let i = 0; i < pieces.length; i++) {
+    const a = pieces[i], b = pieces[i + 1];
+    let slot = ROT[r % 4];
+    const solo = x => x && x.kind !== "mosaic" && x.kind !== "full";
+    if (slot === "pair" && !(solo(a) && solo(b))) slot = last === "low" ? "high" : "low";
+    if (slot === last && (slot === "low" || slot === "high")) slot = slot === "low" ? "high" : "low";   /* never two at the same height */
+    if (a.kind === "full") slot = "mid";
+    last = slot;
+    if (slot === "pair") {
+      out.push(`<div class="hang hang--pair">` +
+        `<div class="hang-cell">${label(a.nums)}${a.html}</div><div class="hang-cell">${label(b.nums)}${b.html}</div></div>`);
+      i++;
+    } else {
+      out.push(hang(slot, a.html, a.nums));
+    }
+    r++;
+  }
+  return `<div class="hang hang--open"><figure class="seq seq--opening">${imgTag(p.slug, opening, `${p.title} — title plate`, true)}</figure></div>`
+       + out.join("");
 }
 
 /* ------------------------------------------------------------------ *
@@ -384,7 +417,7 @@ function showProject(p) {
   document.body.classList.add("dialog-open");
   if (!dialog.open) dialog.showModal();
   dialog.scrollTop = 0;
-  const tr = $("#case-track"); if (tr) tr.scrollLeft = 0;
+  const tr = $("#case-track"); if (tr) trackHome(tr);
   const gh = $("#case-ghost"); if (gh) gh.textContent = p.title;
   dialog.dispatchEvent(new Event("case:open"));
 }
@@ -428,14 +461,15 @@ function openProject(slug, trigger) {
 const caseDim = { img: null, slug: null, raf: 0, centres: [], cost: 0, frames: 0, near: true, open: 0 };
 function caseDimMeasure() {
   const tr = $("#case-track"); if (!tr) return;
+  const v = caseVert(), tb = tr.getBoundingClientRect(), base = v ? tr.scrollTop - tb.top : tr.scrollLeft - tb.left;
   caseDim.centres = $$(".case-head, .case-body > *, .case-foot", tr)
-    .filter(el => el.offsetWidth > 0)
-    .map(el => ({ c: el.offsetLeft + el.offsetWidth / 2, half: el.offsetWidth / 2 }));
+    .map(el => el.getBoundingClientRect()).filter(r => r.width > 0)
+    .map(r => v ? { c: base + r.top + r.height / 2, half: r.height / 2 } : { c: base + r.left + r.width / 2, half: r.width / 2 });
 }
 /* 0 while a panel sits in the middle of the view, 1 in the gap between two */
 function caseDimOpenness(tr) {
   if (!caseDim.centres.length) return 0;
-  const mid = tr.scrollLeft + tr.clientWidth / 2;
+  const mid = trackPos(tr) + (caseVert() ? tr.clientHeight : tr.clientWidth) / 2;
   let best = Infinity, half = 1;
   for (const p of caseDim.centres) { const d = Math.abs(p.c - mid); if (d < best) { best = d; half = p.half; } }
   const k = Math.max(0, Math.min(1, best / Math.max(1, half)));
@@ -446,8 +480,8 @@ function caseDimDraw() {
   if (!dialog.open || !caseDim.img || document.hidden) return;
   const t0 = performance.now();
   const tr = $("#case-track");
-  const st = tr ? tr.scrollLeft : dialog.scrollTop;
-  const max = Math.max(1, tr ? tr.scrollWidth - tr.clientWidth : dialog.scrollHeight - dialog.clientHeight);
+  const st = tr ? trackPos(tr) : dialog.scrollTop;
+  const max = tr ? trackMax(tr) : Math.max(1, dialog.scrollHeight - dialog.clientHeight);
   const idx = PROJECTS.findIndex(x => x.slug === caseDim.slug);
   const open = tr ? caseDimOpenness(tr) : 0;
   const accent = dialog.style.getPropertyValue("--accent") || "#A8402F";
@@ -538,6 +572,11 @@ dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
  * page and space keys step through it. Trackpads and touch keep their
  * own sideways scroll. The head panel scrolls itself when it overflows.
  * ------------------------------------------------------------------ */
+/* phones read a project downwards, everything wider reads it across */
+const caseVert = () => matchMedia("(max-width: 620px)").matches;
+const trackPos = tr => caseVert() ? tr.scrollTop : tr.scrollLeft;
+const trackMax = tr => Math.max(1, caseVert() ? tr.scrollHeight - tr.clientHeight : tr.scrollWidth - tr.clientWidth);
+const trackHome = tr => { tr.scrollLeft = 0; tr.scrollTop = 0; };
 (() => {
   const track = $("#case-track"); if (!track) return;
   track.addEventListener("scroll", caseDimSchedule, { passive: true });
@@ -546,13 +585,16 @@ dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
   let tick = false;
   const layers = () => {
     tick = false;
-    const max = Math.max(1, track.scrollWidth - track.clientWidth), x = track.scrollLeft;
-    if (ghost && !prefersReduced()) ghost.style.transform = `translate3d(${(-x * .25 + innerWidth * .04).toFixed(1)}px,0,0)`;
+    const max = trackMax(track), x = trackPos(track);
+    /* across: the name slides at a quarter speed. Down (phones): it drifts sideways as you read on */
+    const k = caseVert() ? .12 : .25;
+    if (ghost && !prefersReduced()) ghost.style.transform = `translate3d(${(-x * k + innerWidth * .04).toFixed(1)}px,0,0)`;
     if (prog) prog.style.transform = `scaleX(${(x / max).toFixed(4)})`;
   };
   track.addEventListener("scroll", () => { if (!tick) { tick = true; requestAnimationFrame(layers); } }, { passive: true });
   dialog.addEventListener("case:open", layers);
   track.addEventListener("wheel", e => {
+    if (caseVert()) return;                                           /* reading downwards: native */
     if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;            /* sideways gesture: native */
     const head = e.target.closest(".case-head");
     if (head && head.scrollHeight > head.clientHeight + 2) {          /* long text in the head panel */
@@ -569,15 +611,16 @@ dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "]" || (e.shiftKey && e.key === "ArrowRight")) { swapProject(1); e.preventDefault(); return; }
     if (e.key === "[" || (e.shiftKey && e.key === "ArrowLeft"))  { swapProject(-1); e.preventDefault(); return; }
-    const step = track.clientWidth * .8, smooth = prefersReduced() ? "auto" : "smooth";
-    const native = e.target === track && (e.key === "ArrowLeft" || e.key === "ArrowRight");
+    const vert = caseVert();
+    const step = (vert ? track.clientHeight : track.clientWidth) * .8, smooth = prefersReduced() ? "auto" : "smooth";
+    const native = e.target === track && (vert ? (e.key === "ArrowUp" || e.key === "ArrowDown") : (e.key === "ArrowLeft" || e.key === "ArrowRight"));
     let dx = null;
     if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown" || (e.key === " " && tag !== "BUTTON")) dx = step;
     else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") dx = -step;
-    else if (e.key === "Home") { track.scrollTo({ left: 0, behavior: smooth }); e.preventDefault(); return; }
-    else if (e.key === "End") { track.scrollTo({ left: track.scrollWidth, behavior: smooth }); e.preventDefault(); return; }
+    else if (e.key === "Home") { track.scrollTo({ left: 0, top: 0, behavior: smooth }); e.preventDefault(); return; }
+    else if (e.key === "End") { track.scrollTo({ left: track.scrollWidth, top: track.scrollHeight, behavior: smooth }); e.preventDefault(); return; }
     if (dx === null || native) return;
-    track.scrollBy({ left: dx, behavior: smooth });
+    track.scrollBy(vert ? { top: dx, behavior: smooth } : { left: dx, behavior: smooth });
     e.preventDefault();
   });
 })();
@@ -593,7 +636,7 @@ function neighbourProject(dir) {
 function swapProject(dir) {
   const p = neighbourProject(dir); if (!p) return;
   const track = $("#case-track");
-  const go = () => { showProject(p); if (track) track.scrollLeft = 0; };
+  const go = () => { showProject(p); if (track) trackHome(track); };
   if (prefersReduced() || !track) { go(); return; }
   track.classList.add("is-swapping");
   requestAnimationFrame(() => { go(); requestAnimationFrame(() => track.classList.remove("is-swapping")); });
@@ -604,12 +647,13 @@ $("#case-next").addEventListener("click", () => swapProject(1));
 (() => {
   const track = $("#case-track"); if (!track) return;
   let ts = null;
-  track.addEventListener("touchstart", e => { ts = { x: e.touches[0].clientX, fired: false }; }, { passive: true });
+  const at = t => caseVert() ? t.clientY : t.clientX;
+  track.addEventListener("touchstart", e => { ts = { x: at(e.touches[0]), fired: false }; }, { passive: true });
   track.addEventListener("touchmove", e => {
     if (!ts || ts.fired) return;
-    const x = e.touches[0].clientX;
-    /* snap keeps the strip a little short of its true end, so "at the end" has some tolerance */
-    const atEnd = track.scrollLeft >= track.scrollWidth - track.clientWidth - 48;
+    const x = at(e.touches[0]);
+    /* "at the end" has some tolerance: snap and rubber-banding stop a little short */
+    const atEnd = trackPos(track) >= trackMax(track) - 48;
     if (!atEnd) { ts.x = x; return; }
     if (ts.x - x > 90) { ts.fired = true; swapProject(1); }
   }, { passive: true });
