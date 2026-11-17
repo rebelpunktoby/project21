@@ -662,7 +662,19 @@ body > footer .text-link { justify-self: end; }
   opacity: 0; transition: opacity .9s ease .25s; pointer-events: none;
 }
 .case-dim { will-change: opacity, transform; transition: opacity .9s ease .25s, transform .6s ease; }
-.case-dim.is-on { opacity: calc(.07 + var(--dim-open, 0) * .06); transition: opacity .45s ease, transform .6s ease; }
+/* a visible stage: present behind a centred panel, fuller in the gaps */
+.case-dim.is-on { opacity: calc(.24 + var(--dim-open, 0) * .2); transition: opacity .45s ease, transform .6s ease; }
+/* desktop: the hue breathes slowly, like the Flow stage (dropped on slow devices) */
+@media (hover: hover) and (min-width: 760px) {
+  .case:not(.dim-lite) .case-dim.is-on { animation: dim-hue 36s ease-in-out infinite alternate; }
+  @keyframes dim-hue { from { filter: hue-rotate(-16deg) saturate(1.15); } to { filter: hue-rotate(16deg) saturate(1.15); } }
+}
+/* the work never sits on raw pattern: each piece gets a paper halo, labels a paper chip */
+.case-track .hang .seq { box-shadow: 0 0 0 .45rem color-mix(in srgb, var(--paper) 88%, transparent), 0 0 2.6rem 1.1rem color-mix(in srgb, var(--paper) 72%, transparent); }
+.case-track .seq--mosaic { background: color-mix(in srgb, var(--paper) 88%, transparent); }
+.case-track .hang-n { padding: .28rem .45rem; margin-left: -.45rem; border-radius: 2px; background: color-mix(in srgb, var(--paper) 90%, transparent); color: color-mix(in srgb, var(--ink) 72%, var(--muted)); }
+.case-track > .case-foot { background: color-mix(in srgb, var(--paper) 90%, transparent) !important; }
+.case-track .next-label { color: color-mix(in srgb, var(--ink) 60%, var(--muted)); }
 /* the near layer: an inner ring, turning the other way, a touch stronger.
    A centred square, faded to nothing at its rim inside the canvas — small
    to composite, no CSS mask. */
@@ -671,10 +683,10 @@ body > footer .text-link { justify-self: end; }
   width: min(108vh, 100vw); height: min(108vh, 100vw);
   transform: translate(-50%, -50%) scale(calc(1 + var(--dim-open, 0) * .07));
 }
-.case-dim--near.is-on { opacity: calc(.1 + var(--dim-open, 0) * .1); }
+.case-dim--near.is-on { opacity: calc(.3 + var(--dim-open, 0) * .18); }
 /* paper veil under the case's text so it reads cleanly over the dimension */
 .case-intro, .case-cat { position: relative; }
-.case-head { background: linear-gradient(color-mix(in srgb, var(--paper) 82%, transparent), color-mix(in srgb, var(--paper) 82%, transparent)); }
+.case-head { background: linear-gradient(color-mix(in srgb, var(--paper) 91%, transparent), color-mix(in srgb, var(--paper) 91%, transparent)); }
 /* the veil is thinner now, so the small grey labels on it go a step darker */
 .case-track .case-cat, .case-track .case-scope, .case-sheet-title { color: color-mix(in srgb, var(--ink) 45%, var(--muted)); }
 
@@ -937,6 +949,54 @@ body > footer .text-link { justify-self: end; }
 .hang--pair > .hang-cell:first-child > .hang-n { bottom: -1.3rem; }
 .hang--pair > .hang-cell:last-child > .hang-n { top: -1.3rem; bottom: auto; }
 
+/* 萬花筒 windows in the gaps -------------------------------------------
+   a round window in the empty part of a bay; a hairline in the project's
+   colour threads the wall together and drops into each window */
+.case-track > .case-body { position: relative; }
+.case-track > .case-body::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1.5px; pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 85%, transparent);
+}
+.kwin-wrap {
+  position: absolute; right: 6%; height: 27%; aspect-ratio: 1; max-width: 80%; pointer-events: none;
+  border-radius: 50%; padding: 3px;
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 .5rem color-mix(in srgb, var(--paper) 70%, transparent);
+  transform: scale(calc(.94 + var(--dim-open, 0) * .1)); transition: transform .5s ease;
+}
+.kwin { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--paper-2); }
+.hang--low  > .kwin-wrap { top: 5%; }
+.hang--high > .kwin-wrap { bottom: 5%; }
+.kwin-wrap::after {                       /* the drop from window to thread */
+  content: ""; position: absolute; left: 50%; width: 1.5px; background: color-mix(in srgb, var(--accent) 85%, transparent);
+}
+.hang--low  > .kwin-wrap::after { top: 100%; height: 40%; }
+.hang--high > .kwin-wrap::after { bottom: 100%; height: 40%; }
+.hang-n { z-index: 2; }
+
+/* back to start — same spot wherever you are in a project */
+.case-top {
+  position: absolute; left: var(--pad); bottom: 1.1rem; z-index: 25;
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--paper) 94%, transparent); color: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--accent), 0 8px 22px -10px rgba(0,0,0,.45);
+  font: 400 1.15rem/1 var(--mono);
+  opacity: 0; visibility: hidden; transform: translateY(.5rem);
+  transition: opacity .3s ease, transform .3s ease, visibility 0s linear .3s;
+}
+.case-top.is-on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.case-top i { font-style: normal; }
+.case-top .ct-y { display: none; }
+.case-top:hover { background: var(--paper); }
+.case-top:focus-visible { outline: 2px solid var(--seal); outline-offset: 3px; }
+.case-top-tip {
+  position: absolute; left: calc(100% + .6rem); top: 50%; transform: translateY(-50%); white-space: nowrap;
+  padding: .4rem .6rem; border-radius: 2px; background: var(--ink); color: var(--paper);
+  font: 500 .66rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.case-top-tip [lang="zh-Hant"] { text-transform: none; margin-left: .4em; }
+.case-top:hover .case-top-tip, .case-top:focus-visible .case-top-tip { opacity: 1; }
+
 /* puzzles: same-shaped detail/product shots share one panel -------- */
 .case-track .seq--mosaic { display: grid; gap: 8px; width: auto; flex: 0 0 auto; }
 .seq--m2 { grid-template-columns: 1fr 1fr; }
@@ -1043,6 +1103,7 @@ body > footer .text-link { justify-self: end; }
   }
   @keyframes sheet-up { from { transform: translateY(100%); opacity: .4; } }
   /* phones: the wall reads downwards — pieces hang left, right, full; pairs side by side, staggered */
+  .case-track > .case-body { overflow-x: clip; margin-inline: -5vw; padding-inline: 5vw; }      /* the half-moons are cut at the screen edge, never scrollable */
   .case-track { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto;
     overscroll-behavior-y: contain; gap: 2.4rem; padding: 1.4rem 5vw 2.5rem; scroll-snap-type: none; }
   .case-track > .case-head { flex: 0 0 auto; max-height: none; overflow: visible; padding: 1.3rem 1.1rem; }
@@ -1062,7 +1123,19 @@ body > footer .text-link { justify-self: end; }
   .hang-n, .hang--big > .hang-n, .hang--mid > .hang-n, .hang--open > .hang-n, .hang--high > .hang-n, .hang--low > .hang-n,
   .hang-cell > .hang-n, .hang--pair > .hang-cell:first-child > .hang-n, .hang--pair > .hang-cell:last-child > .hang-n {
     position: static; order: 2; margin-top: .55rem; }
-  .hang--low > .hang-n { text-align: right; }
+  /* phones: the thread runs down the middle; windows peek in from the free edge as half-moons */
+  .case-track > .case-body::before { left: 50%; right: auto; top: 0; bottom: 0; width: 1.5px; height: auto; }
+  .kwin-wrap { height: auto; width: 34vw; max-width: none; top: 50% !important; bottom: auto !important; right: auto; margin-top: -17vw; }
+  .hang--high > .kwin-wrap { left: calc(100% + 3vw); }
+  .hang--low  > .kwin-wrap { right: calc(100% + 3vw); }
+  .kwin-wrap::after { display: none; }
+  .case-top { left: auto; right: var(--pad); bottom: 1rem; }
+  .case-top .ct-x { display: none; } .case-top .ct-y { display: inline; }
+  .case-top-tip { display: none; }
+  .sheet-open .case-top { opacity: 0; visibility: hidden; }
+  .hang--low > .hang-n { text-align: right; align-self: flex-end; margin-left: 0; }
+  .case-track .hang-n { align-self: flex-start; }
+  .case-track .hang--low > .hang-n { align-self: flex-end; }
 }
 
 /* =================================================================
@@ -1179,6 +1252,26 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .colophon { display: none; }
 }
 
+/* page up — back to the top of the section you're in */
+.page-up {
+  position: fixed; right: var(--pad); bottom: 1.1rem; z-index: 55;
+  display: inline-flex; align-items: center; gap: .55rem;
+  min-height: 44px; padding: 0 1rem 0 .85rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  box-shadow: 0 0 0 1.5px var(--thread, var(--seal)), 0 8px 22px -10px rgba(0,0,0,.4);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font: 500 .68rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink);
+  animation: page-up-in .3s ease both;
+  transition: box-shadow 1.2s ease;
+}
+.page-up[hidden] { display: none; }
+.page-up i { font-style: normal; font-size: 1rem; color: var(--thread, var(--seal)); transition: transform var(--t); }
+.page-up:hover i { transform: translateY(-.15rem); }
+.page-up [lang="zh-Hant"] { text-transform: none; letter-spacing: 0; margin-left: .35em; opacity: .75; }
+.page-up:focus-visible { outline: 2px solid var(--seal); outline-offset: 3px; }
+@keyframes page-up-in { from { opacity: 0; transform: translateY(.5rem); } }
+@media (max-width: 620px) { .page-up { bottom: .9rem; } }
+
 /* =================================================================
    REDUCED MOTION
    ================================================================= */
@@ -1198,9 +1291,11 @@ html.no-js .reveal { opacity: 1; transform: none; }
   .hero-frame img.was-on { opacity: 0; }
   .case-body .seq img { animation: none !important; clip-path: none; transform: none !important; }
   .case-ghost { display: none; }
+  .kwin-wrap { transform: none; transition: none; }
+  .case-top { transition: none; }
   .contact-call .ct-line { animation: none !important; transform: none !important; }
   .case-body > .hang { animation: none !important; opacity: 1 !important; transform: none !important; }
-  .case-zoom, .case-sheet { animation: none; }
+  .case-zoom, .case-sheet, .page-up { animation: none; }
   .site-header { transition: none; }
   .fx-canvas { animation: none; display: none; }
   .case-track { transition: none; }

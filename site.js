@@ -350,7 +350,11 @@ function sequenceHTML(p) {
     const a = Math.min(...nums), b = Math.max(...nums);
     return `<span class="hang-n" aria-hidden="true">${a === b ? pad(a) : pad(a) + "–" + pad(b)}<i> / ${pad(total)}</i></span>`;
   };
-  const hang = (cls, inner, nums) => `<div class="hang hang--${cls}">${label(nums)}${inner}</div>`;
+  /* a 萬花筒 window hangs in the empty part of every other low/high bay */
+  let bays = 0;
+  const win = cls => (cls === "low" || cls === "high") && bays++ % 2 === 0
+    ? `<span class="kwin-wrap" aria-hidden="true"><canvas class="kwin"></canvas></span>` : "";
+  const hang = (cls, inner, nums) => `<div class="hang hang--${cls}">${label(nums)}${inner}${win(cls)}</div>`;
   const out = [];
   const ROT = ["big", "pair", "low", "high"];
   let r = 0, last = "";
@@ -475,9 +479,31 @@ function caseDimOpenness(tr) {
   const k = Math.max(0, Math.min(1, best / Math.max(1, half)));
   return k * k * (3 - 2 * k);
 }
+/* the windows: the same kaleidoscope at full strength, in the gaps of the wall.
+   Only windows on screen are drawn (three at most per frame); each starts at its own
+   angle and turns with the strip. Still frames under reduced motion and on slow devices. */
+const caseWinIO = "IntersectionObserver" in window ? new IntersectionObserver(es => {
+  for (const e of es) { const w = (caseDim.wins || []).find(x => x.cv === e.target); if (w) w.on = e.isIntersecting; }
+  caseDimSchedule();
+}, { rootMargin: "80px" }) : null;
+function caseWinCollect() {
+  if (caseWinIO) caseWinIO.disconnect();
+  caseDim.wins = $$(".kwin", dBody).map((cv, i) => ({ cv, i, on: !caseWinIO, done: false }));
+  if (caseWinIO) caseDim.wins.forEach(w => caseWinIO.observe(w.cv));
+}
+function caseWinDraw(st, still) {
+  let n = 0;
+  for (const w of caseDim.wins || []) {
+    if (still ? w.done : (!w.on || ++n > 3)) continue;
+    kaleidoPaint(w.cv, 0, { scale: .6, img: caseDim.img, lens: false, p: .4 + (w.i % 3) * .14,
+      rot: (still ? 0 : st * .0022 * (w.i % 2 ? -1 : 1)) + w.i * 1.3 });
+    w.done = true;
+  }
+}
 function caseDimDraw() {
   caseDim.raf = 0;
   if (!dialog.open || !caseDim.img || document.hidden) return;
+  if (prefersReduced()) { caseWinDraw(0, true); return; }
   const t0 = performance.now();
   const tr = $("#case-track");
   const st = tr ? trackPos(tr) : dialog.scrollTop;
@@ -504,6 +530,7 @@ function caseDimDraw() {
     nx.globalCompositeOperation = "destination-in"; nx.fillStyle = g; nx.fillRect(0, 0, nw, nh);
     nx.globalCompositeOperation = "source-over";
   }
+  caseWinDraw(st, dialog.classList.contains("dim-lite"));
   if (Math.abs(open - caseDim.open) > .01) { caseDim.open = open; dialog.style.setProperty("--dim-open", open.toFixed(3)); }
   /* cost watch: a slow device keeps the far layer only */
   const dt = performance.now() - t0;
@@ -513,18 +540,20 @@ function caseDimDraw() {
   if (gap < 100) { caseDim.gap = caseDim.gap ? caseDim.gap + (gap - caseDim.gap) * .1 : gap; caseDim.run = (caseDim.run || 0) + 1; } else caseDim.run = 0;
   if (caseDim.near && ((caseDim.frames > 12 && caseDim.cost > 8) || (caseDim.run > 24 && caseDim.gap > 28))) {
     caseDim.near = false; if (near) near.classList.remove("is-on");
+    dialog.classList.add("dim-lite");                       /* and the hue stops breathing */
   }
 }
 function caseDimSchedule() { if (!caseDim.raf) caseDim.raf = requestAnimationFrame(caseDimDraw); }
 function caseDimSet(p) {
   const cv = $("#case-dim"), near = $("#case-dim-near");
-  if (!cv || prefersReduced()) return;
+  if (!cv) return;
   cv.classList.remove("is-on"); if (near) near.classList.remove("is-on");
   caseDim.slug = p.slug; caseDim.img = null;
   const img = new Image(); img.decoding = "async"; img.src = thumb(p.slug);
   (img.decode ? img.decode() : Promise.resolve()).then(() => {
     if (caseDim.slug !== p.slug) return;
-    caseDim.img = img; caseDimMeasure(); caseDimDraw();
+    caseDim.img = img; caseDimMeasure(); caseWinCollect(); caseDimDraw();
+    if (prefersReduced()) return;                             /* still windows only; no backdrop */
     cv.classList.add("is-on"); if (near && caseDim.near) near.classList.add("is-on");
   }, () => {});
 }
@@ -581,7 +610,11 @@ const trackHome = tr => { tr.scrollLeft = 0; tr.scrollTop = 0; };
   const track = $("#case-track"); if (!track) return;
   track.addEventListener("scroll", caseDimSchedule, { passive: true });
   /* ghost title slides at a quarter of the strip's speed; progress rule fills */
-  const ghost = $("#case-ghost"), prog = $("#case-progress");
+  const ghost = $("#case-ghost"), prog = $("#case-progress"), toTop = $("#case-top");
+  if (toTop) toTop.addEventListener("click", () => {
+    track.scrollTo({ left: 0, top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
+    try { dTitle.focus({ preventScroll: true }); } catch (_) {}
+  });
   let tick = false;
   const layers = () => {
     tick = false;
@@ -590,6 +623,7 @@ const trackHome = tr => { tr.scrollLeft = 0; tr.scrollTop = 0; };
     const k = caseVert() ? .12 : .25;
     if (ghost && !prefersReduced()) ghost.style.transform = `translate3d(${(-x * k + innerWidth * .04).toFixed(1)}px,0,0)`;
     if (prog) prog.style.transform = `scaleX(${(x / max).toFixed(4)})`;
+    if (toTop) toTop.classList.toggle("is-on", x > (caseVert() ? track.clientHeight : track.clientWidth) * .5);
   };
   track.addEventListener("scroll", () => { if (!tick) { tick = true; requestAnimationFrame(layers); } }, { passive: true });
   dialog.addEventListener("case:open", layers);
@@ -746,6 +780,55 @@ $$(".read").forEach(block => {
 /* HEADER TUCK — on phones and tablets the header is two rows tall, so it
    slides away while you scroll down (it was covering the words) and comes
    back as soon as you scroll up. Desktop keeps it fixed. */
+/* PAGE UP — on the main page, a small button that takes you back to the top
+   of the section you're in (Work, Studio …), named on the button so you know
+   where it goes. Near a section's top already, it goes to the page top.
+   Shows once you're a screen down; hidden while a project is open. */
+function initPageUp() {
+  const btn = $("#page-up"); if (!btn) return;
+  const to = $(".page-up-to", btn);
+  const chapters = $$("main section.chapter[id]");
+  const name = sec => { const h = sec.querySelector("h2"); if (!h) return null;
+    const clone = h.cloneNode(true); const zh = clone.querySelector('[lang="zh-Hant"]');
+    const zht = zh ? zh.textContent.trim() : ""; if (zh) zh.remove();
+    return { en: clone.textContent.trim(), zh: zht }; };
+  const NAMES = new Map(chapters.map(s => [s, name(s)]));
+  NAMES.set("top", { en: "Top", zh: "頂端" });
+  /* Contact's heading is the big call; its eyebrow carries the plain name */
+  const ct = $("#contact"); if (ct) NAMES.set(ct, { en: "Contact", zh: "聯絡" });
+  let target = "top", ticking = false;
+  const update = () => {
+    ticking = false;
+    const y = scrollY, vh = innerHeight;
+    const foot = $("body > footer"), fr = foot && foot.getBoundingClientRect();
+    const show = y > vh * .9 && !document.body.classList.contains("dialog-open")
+      && !(fr && fr.top < vh - 10);                         /* the footer has its own Top link */
+    btn.hidden = !show; if (!show) return;
+    let cur = null;
+    for (const s of chapters) if (s.getBoundingClientRect().top <= vh * .35) cur = s;
+    /* already near its top → the page top instead */
+    const t = cur && cur.getBoundingClientRect().top < -vh * .6 ? cur : "top";
+    if (t !== target) {
+      target = t;
+      const n = NAMES.get(t);
+      to.innerHTML = `${esc(n.en)} <span lang="zh-Hant">${esc(n.zh)}</span>`;
+      btn.setAttribute("aria-label", `Back to ${n.en} 回到${n.zh}`);
+    }
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  addEventListener("resize", update);
+  new MutationObserver(update).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  btn.addEventListener("click", () => {
+    const smooth = prefersReduced() ? "auto" : "smooth";
+    if (target === "top") { scrollTo({ top: 0, behavior: smooth }); return; }
+    target.scrollIntoView({ block: "start", behavior: smooth });
+    const h = target.querySelector("h2"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+  });
+  /* first label */
+  to.innerHTML = `Top <span lang="zh-Hant">頂端</span>`; btn.setAttribute("aria-label", "Back to Top 回到頂端");
+  update();
+}
+
 function initHeaderTuck() {
   const head = $(".site-header"); if (!head) return;
   const mq = matchMedia("(max-width: 980px)");
@@ -1563,6 +1646,7 @@ renderFilters();
 renderIndex();
 initChapters();
 initHeaderTuck();
+initPageUp();
 weather = initWeather();   /* before the hero, which sets the first colour */
 nameFrame = initNameFrame();
 initHero();
