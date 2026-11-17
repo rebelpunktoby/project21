@@ -1046,8 +1046,13 @@ html.no-js .reveal { opacity: 1; transform: none; }
   :root { --bar: 3.1rem; }
   h1 { font-size: clamp(2.1rem, 10vw, 2.9rem); }
   .chapters { flex-wrap: wrap; gap: 0 1.1rem; overflow: visible; }
-  .chapters a { font-size: .7rem; letter-spacing: .03em; padding-top: .45rem; padding-bottom: .1rem; }
-  .chapters { padding-bottom: .5rem; }
+  /* fingers, not pointers: every tappable line gets at least 24px of height */
+  .chapters a { font-size: .7rem; letter-spacing: .03em; padding-top: .55rem; padding-bottom: .35rem; }
+  .chapters { padding-bottom: .35rem; }
+  .chip { padding-block: .55rem; }
+  .text-link { padding-top: .5rem; padding-bottom: .5rem; }
+  .case-info { min-height: 44px; }
+  .read-toggle { padding-block: .6rem; }
   .hero-plate { width: 100%; }
   .hero { padding-top: 2.2rem; }   /* room for the name frame's top line */
 
