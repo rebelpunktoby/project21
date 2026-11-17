@@ -415,35 +415,88 @@ function openProject(slug, trigger) {
 }
 
 /* ------------------------------------------------------------------ *
- * CASE DIMENSION — opening a project steps into its kaleidoscope: the
- * project's own cover, mirrored, very faint behind its pages, turning
- * as the case scrolls. Drawn only on the dialog's scroll; cover comes
- * from the index thumbnail already in cache. Off under reduced motion.
+ * CASE DIMENSION — opening a project steps inside its kaleidoscope.
+ * Two layers made from the project's own cover: a far one, large and
+ * slow, and a near one — a smaller inner ring turning the other way,
+ * faster. Both follow the strip: they turn with scrollLeft, open up
+ * (brighter, wider) in the gap between two panels and settle back when
+ * a panel is centred, and carry the project's accent, strongest while a
+ * panel is in focus. Drawn only when the strip moves — nothing runs
+ * while you look. If a frame costs too much the near layer is dropped.
+ * Off under reduced motion.
  * ------------------------------------------------------------------ */
-const caseDim = { img: null, slug: null, raf: 0 };
+const caseDim = { img: null, slug: null, raf: 0, centres: [], cost: 0, frames: 0, near: true, open: 0 };
+function caseDimMeasure() {
+  const tr = $("#case-track"); if (!tr) return;
+  caseDim.centres = $$(".case-head, .case-body > *, .case-foot", tr)
+    .filter(el => el.offsetWidth > 0)
+    .map(el => ({ c: el.offsetLeft + el.offsetWidth / 2, half: el.offsetWidth / 2 }));
+}
+/* 0 while a panel sits in the middle of the view, 1 in the gap between two */
+function caseDimOpenness(tr) {
+  if (!caseDim.centres.length) return 0;
+  const mid = tr.scrollLeft + tr.clientWidth / 2;
+  let best = Infinity, half = 1;
+  for (const p of caseDim.centres) { const d = Math.abs(p.c - mid); if (d < best) { best = d; half = p.half; } }
+  const k = Math.max(0, Math.min(1, best / Math.max(1, half)));
+  return k * k * (3 - 2 * k);
+}
 function caseDimDraw() {
   caseDim.raf = 0;
-  if (!dialog.open || !caseDim.img) return;
+  if (!dialog.open || !caseDim.img || document.hidden) return;
+  const t0 = performance.now();
   const tr = $("#case-track");
   const st = tr ? tr.scrollLeft : dialog.scrollTop;
   const max = Math.max(1, tr ? tr.scrollWidth - tr.clientWidth : dialog.scrollHeight - dialog.clientHeight);
-  kaleidoPaint($("#case-dim"), performance.now(), {
-    scale: .25, img: caseDim.img, lens: false,
-    p: .3 + (st / max) * .45, rot: st * 0.0006 + PROJECTS.findIndex(x => x.slug === caseDim.slug) * .4
-  });
+  const idx = PROJECTS.findIndex(x => x.slug === caseDim.slug);
+  const open = tr ? caseDimOpenness(tr) : 0;
+  const accent = dialog.style.getPropertyValue("--accent") || "#A8402F";
+  const tint = (cv, alpha) => {
+    const ctx = cv.getContext("2d");
+    ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = alpha; ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, cv.clientWidth, cv.clientHeight);
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  };
+  const far = $("#case-dim"), near = $("#case-dim-near");
+  kaleidoPaint(far, t0, { scale: .14, img: caseDim.img, lens: false, p: .3 + (st / max) * .45, rot: st * 0.0004 + idx * .4 });
+  tint(far, .55 - open * .3);
+  if (caseDim.near && near) {
+    kaleidoPaint(near, t0, { scale: .2, img: caseDim.img, lens: false, p: .78 - (st / max) * .4, rot: -st * 0.0011 - idx * .7 });
+    tint(near, .7 - open * .35);
+    /* fade the ring out toward its rim, inside the canvas */
+    const nx = near.getContext("2d"), nw = near.clientWidth, nh = near.clientHeight;
+    const g = nx.createRadialGradient(nw / 2, nh / 2, nw * .2, nw / 2, nh / 2, nw * .5);
+    g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    nx.globalCompositeOperation = "destination-in"; nx.fillStyle = g; nx.fillRect(0, 0, nw, nh);
+    nx.globalCompositeOperation = "source-over";
+  }
+  if (Math.abs(open - caseDim.open) > .01) { caseDim.open = open; dialog.style.setProperty("--dim-open", open.toFixed(3)); }
+  /* cost watch: a slow device keeps the far layer only */
+  const dt = performance.now() - t0;
+  if (++caseDim.frames > 3) caseDim.cost += (dt - caseDim.cost) * .2;       /* the first frames carry the image upload */
+  /* and the real test: how far apart frames land while the strip is moving */
+  const gap = t0 - (caseDim.last || 0); caseDim.last = t0;
+  if (gap < 100) { caseDim.gap = caseDim.gap ? caseDim.gap + (gap - caseDim.gap) * .1 : gap; caseDim.run = (caseDim.run || 0) + 1; } else caseDim.run = 0;
+  if (caseDim.near && ((caseDim.frames > 12 && caseDim.cost > 8) || (caseDim.run > 24 && caseDim.gap > 28))) {
+    caseDim.near = false; if (near) near.classList.remove("is-on");
+  }
 }
 function caseDimSchedule() { if (!caseDim.raf) caseDim.raf = requestAnimationFrame(caseDimDraw); }
 function caseDimSet(p) {
-  const cv = $("#case-dim");
+  const cv = $("#case-dim"), near = $("#case-dim-near");
   if (!cv || prefersReduced()) return;
-  cv.classList.remove("is-on");
+  cv.classList.remove("is-on"); if (near) near.classList.remove("is-on");
   caseDim.slug = p.slug; caseDim.img = null;
   const img = new Image(); img.decoding = "async"; img.src = thumb(p.slug);
   (img.decode ? img.decode() : Promise.resolve()).then(() => {
     if (caseDim.slug !== p.slug) return;
-    caseDim.img = img; caseDimDraw(); cv.classList.add("is-on");
+    caseDim.img = img; caseDimMeasure(); caseDimDraw();
+    cv.classList.add("is-on"); if (near && caseDim.near) near.classList.add("is-on");
   }, () => {});
 }
+dialog.addEventListener("case:open", () => { caseDimMeasure(); setTimeout(caseDimMeasure, 700); });
+addEventListener("resize", () => { if (dialog.open) { caseDimMeasure(); caseDimSchedule(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && dialog.open) caseDimSchedule(); });
 dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
 
 /* ------------------------------------------------------------------ *
@@ -569,7 +622,7 @@ const closeProject = () => { if (dialog.open) dialog.close(); };
 /* single cleanup path — also catches Escape */
 dialog.addEventListener("close", () => {
   document.body.classList.remove("dialog-open");
-  const cd = $("#case-dim"); if (cd) cd.classList.remove("is-on");
+  $$(".case-dim").forEach(cd => cd.classList.remove("is-on"));
   caseDim.img = null; caseDim.slug = null;
   dBody.innerHTML = "";
   const slug = active && active.slug;
