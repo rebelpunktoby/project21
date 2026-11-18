@@ -913,30 +913,31 @@ body > footer .text-link { justify-self: end; }
 
 /* wider screens: each piece is a slide about a screen tall */
 @media (min-width: 900px) {
-  .case-track { scroll-snap-type: y proximity; gap: 0; padding: 0 var(--pad) 3rem; }
+  .case-track { gap: 0; padding: 0 var(--pad) 3rem; }
   .case-track > .case-head {
     position: absolute; z-index: 3; left: var(--pad); top: calc(var(--slide) / 2); transform: translateY(-50%);
     width: min(24rem, 28vw); padding: 1.6rem 1.4rem;
   }
   .case-track > .case-body { gap: 0; padding: 0 var(--pad); margin-inline: calc(var(--pad) * -1); }
   /* every piece is its own slide: one screen tall, the work as big as the screen allows, snapping into place */
-  .case-track { scroll-snap-type: y mandatory; }
-  .hang { justify-content: center; align-items: center; min-height: var(--slide); padding-block: 4vh; scroll-snap-align: center; scroll-snap-stop: always; }
+  /* no CSS snap: it pulls a mouse-wheel step back; site.js settles the nearest piece once scrolling stops */
+  .hang { justify-content: center; align-items: center; min-height: var(--slide); padding-block: 7vh; }
   /* sized from each piece's own proportions (--ar), so it is never taller than the screen */
-  .case-track .hang > .seq { width: min(84vw, calc(var(--slide) * .84 * var(--ar, 1))); }
+  .case-track .hang > .seq { width: min(78vw, calc(var(--slide) * .76 * var(--ar, 1))); }
   .hang--open { align-items: flex-end; padding-right: 2%; }
-  .case-track .hang--open > .seq { width: min(60vw, calc(var(--slide) * .86 * var(--ar, 1))); }
-  .case-track .hang--mid > .seq { width: min(84vw, calc(var(--slide) * .84 * var(--ar, 1))); }
+  .case-track .hang--open > .seq { width: min(58vw, calc(var(--slide) * .78 * var(--ar, 1))); }
+  .case-track .hang--mid > .seq { width: min(78vw, calc(var(--slide) * .76 * var(--ar, 1))); }
   .hang--high, .hang--low { width: auto; align-self: stretch; }
-  .hang--high { align-items: flex-start; padding-left: 4%; }
-  .hang--low  { align-items: flex-end; padding-right: 4%; }
-  .case-track .hang--high > .seq, .case-track .hang--low > .seq { width: min(64vw, calc(var(--slide) * .84 * var(--ar, 1))); }
-  .hang--pair { flex-direction: row; justify-content: center; align-items: center; gap: 3vw; }
+  /* hung pieces keep clear of the ↑ button's column on either edge */
+  .hang--high { align-items: flex-start; padding-left: calc(var(--pad) + 3.4rem); }
+  .hang--low  { align-items: flex-end; padding-right: calc(var(--pad) + 3.4rem); }
+  .case-track .hang--high > .seq, .case-track .hang--low > .seq { width: min(60vw, calc(var(--slide) * .76 * var(--ar, 1))); }
+  .hang--pair { flex-direction: row; justify-content: center; align-items: center; gap: 4vw; }
   .hang-cell { width: auto; align-items: flex-start; }
-  .case-track .hang-cell > .seq { width: min(42vw, calc(var(--slide) * .74 * var(--ar, 1))); }
+  .case-track .hang-cell > .seq { width: min(38vw, calc(var(--slide) * .66 * var(--ar, 1))); }
   .hang--pair > .hang-cell:last-child { margin-top: 6vh; }
   .hang--low > .hang-n { margin-left: -.45rem; }
-  .case-track > .case-foot { min-height: 60vh; justify-content: center; align-items: center; scroll-snap-align: center; background: none !important; }
+  .case-track > .case-foot { min-height: 60vh; justify-content: center; align-items: center; background: none !important; }
   .case-track > .case-foot { align-items: stretch; width: min(26rem, 40vw); margin-inline: auto; }
   .case-track > .case-foot > * { background: color-mix(in srgb, var(--paper) 92%, transparent); }
 }

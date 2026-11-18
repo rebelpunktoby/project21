@@ -349,10 +349,8 @@ function sequenceHTML(p) {
     const a = Math.min(...nums), b = Math.max(...nums);
     return `<span class="hang-n" aria-hidden="true">${a === b ? pad(a) : pad(a) + "–" + pad(b)}<i> / ${pad(total)}</i></span>`;
   };
-  /* a 萬花筒 window hangs in the empty part of every other low/high bay */
-  let bays = 0;
-  const win = cls => (cls === "low" || cls === "high") && bays++ % 2 === 0
-    ? `<span class="kwin-wrap" aria-hidden="true"><canvas class="kwin"></canvas></span>` : "";
+  /* no round windows any more: the 萬花筒 behind the wall is enough, the work stays the only thing in front */
+  const win = () => "";
   const hang = (cls, inner, nums) => `<div class="hang hang--${cls}">${label(nums)}${inner}${win(cls)}</div>`;
   const out = [];
   const ROT = ["big", "pair", "low", "high"];
@@ -586,6 +584,30 @@ function caseDimSet(p) {
     cv.classList.add("is-on"); if (near && caseDim.near) near.classList.add("is-on");
   }, () => {});
 }
+/* laptop and up: scroll freely, and when you stop near a piece it eases into the middle of the screen */
+(() => {
+  const tr = $("#case-track"); if (!tr) return;
+  let t = 0, settling = false, last = tr.scrollTop, dir = 0;
+  const settle = () => {
+    if (!dialog.open || !matchMedia("(min-width: 900px)").matches || prefersReduced()) return;
+    const tb = tr.getBoundingClientRect(), mid = tb.top + tb.height / 2;
+    const ds = $$(".case-body > .hang, .case-foot", tr).map(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 - mid; });
+    if (!ds.length) return;
+    /* carry on to the next piece in the direction you were scrolling once you are a quarter of the way there */
+    const ahead = ds.filter(d => dir > 0 ? d > 3 : d < -3).sort((a, b) => Math.abs(a) - Math.abs(b))[0];
+    let best = ds.reduce((a, b) => Math.abs(b) < Math.abs(a) ? b : a);
+    if (dir && ahead !== undefined && Math.abs(ahead) < tb.height * .75) best = ahead;
+    if (Math.abs(best) < 3 || Math.abs(best) > tb.height * .9) return;
+    if (tr.scrollTop + best < 0 || tr.scrollTop + best > tr.scrollHeight - tr.clientHeight) return;
+    settling = true; tr.scrollBy({ top: best, behavior: "smooth" });
+    setTimeout(() => { settling = false; }, 700);
+  };
+  tr.addEventListener("scroll", () => {
+    const s = tr.scrollTop; if (s !== last) dir = s > last ? 1 : -1; last = s;
+    if (settling) return; clearTimeout(t); t = setTimeout(settle, 160);
+  }, { passive: true });
+  ["pointerdown", "keydown", "wheel", "touchstart"].forEach(ev => tr.addEventListener(ev, () => { clearTimeout(t); }, { passive: true }));
+})();
 dialog.addEventListener("case:open", () => { caseInterleave(); caseDimMeasure(); setTimeout(() => { caseInterleave(); caseDimMeasure(); }, 700); });
 addEventListener("resize", () => { if (dialog.open) { caseInterleave(); caseDimMeasure(); caseDimSchedule(); } });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && dialog.open) caseDimSchedule(); });
