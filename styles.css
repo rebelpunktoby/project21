@@ -784,7 +784,7 @@ body > footer .text-link { justify-self: end; }
 @supports (animation-timeline: view()) {
   .case-body .seq:not(.seq--opening) img {
     animation: var(--wipe, seq-wipe-y) 1ms linear forwards;
-    animation-timeline: view(inline);          /* the case scrolls sideways */
+    animation-timeline: view(block);
     animation-range: entry 0% entry 45%;
   }
   .case-body.wipe-x { --wipe: seq-wipe-x; }
@@ -865,9 +865,9 @@ body > footer .text-link { justify-self: end; }
 ::view-transition-old(plate) { display: none; }
 
 /* =================================================================
-   HORIZONTAL CASE — the home page reads down; a project reads across.
-   head panel → images in a row → next/close panel. Vertical wheel and
-   arrow keys move it sideways (site.js); phones swipe with snap.
+   THE CASE — a project reads downwards on every screen, one piece per
+   slide. Pieces hang left, centre and right in turn; the free side
+   holds a 萬花筒 window. Phones keep the tighter stack.
    ================================================================= */
 .hero-more { margin-top: 1rem; }
 .hero .name-frame .nf-inner { fill-opacity: .4; }
@@ -875,103 +875,97 @@ body > footer .text-link { justify-self: end; }
 .case { overflow: hidden; }
 .case-shell { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .case-track {
-  display: flex; align-items: center; gap: clamp(1.5rem, 3vw, 3.5rem);
+  --slide: calc(100dvh - 3.5rem);
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 2.4rem;
   min-height: 0; height: 100%;
-  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
-  padding: 0 var(--pad); scrollbar-width: thin;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  padding: 1.4rem 5vw 2.5rem; scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 55%, transparent) transparent;
 }
 .case-track:focus-visible { outline: 2px solid var(--seal); outline-offset: -4px; }
 .case-track > .case-head h2 { font-size: clamp(1.75rem, 2.6vw, 3.2rem); text-wrap: balance; }
-.case-track > .case-head {
-  flex: 0 0 min(30rem, 34vw); align-self: center;
-  display: flex; flex-direction: column; gap: 1.1rem;
-  padding: 1.6rem 1.4rem; max-height: calc(100% - 2rem); overflow-y: auto;
-}
+.case-track > .case-head { flex: 0 0 auto; display: flex; flex-direction: column; gap: 1.1rem; padding: 1.3rem 1.1rem; }
 .case-track .case-intro .read-full { grid-template-columns: 1fr; }
 .case-track > .case-body {
-  flex: 0 0 auto; height: 100%;
-  display: flex; align-items: center; gap: clamp(1.2rem, 2.4vw, 2.6rem); padding: 0;
+  position: relative; flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 2.6rem;
+  padding: 0 5vw; margin-inline: -5vw; overflow-x: clip;        /* windows are cut at the screen edge, never scrollable */
 }
-.case-track .seq { flex: 0 0 auto; height: 78%; width: auto; margin: 0; }
-.case-track .seq img { height: 100%; width: auto; max-width: none; }
-.case-track .seq--full { height: 100%; margin: 0; }
-.case-track .seq--opening { margin: 0; }
-.case-track .hang > .seq--full { height: 62%; }
-.case-track .seq--pair { display: flex; gap: var(--gap); height: 78%; }
-.case-track .pair-cell { height: 100%; flex: 0 0 auto; }
-.case-track .pair-cell img { height: 100%; width: auto; }
-.case-track .seq--pause { width: 2.5rem; height: auto; padding: 0; }
-.case-track .pause-rule { width: 2px; height: 3.5rem; }
-.case-track > .case-foot {
-  flex: 0 0 min(24rem, 70vw); align-self: center;
-  display: flex; flex-direction: column; margin: 0; border: 0; background: none;
-}
-.case-track > .case-foot .case-return { border-left: 0; }
-.case-track::after { content: ""; flex: 0 0 1px; }       /* end padding that flex scrollers otherwise drop */
+.case-track .seq { margin: 0; }
+.case-track .seq img { width: 100%; height: auto; max-width: none; }
+.case-track .seq--pause { display: none; }
+.case-track > .case-foot { flex: 0 0 auto; display: flex; flex-direction: column; margin: 0; border: 0; }
+.case-track > .case-foot .case-return { border-left: 0; color: var(--ink); border-top: 1px solid var(--line); }
 
-/* the hung wall -------------------------------------------------------
-   each piece hangs in its own bay; the bay is the full strip height and
-   the piece takes a share of it, top, middle or bottom. Numbers sit in
-   the free space beside the piece, like a show label. */
-.case-track > .case-body { align-items: stretch; gap: clamp(1.6rem, 3.2vw, 3.6rem); }
-.hang { position: relative; flex: 0 0 auto; height: 100%; display: flex; flex-direction: column; min-width: 0; }
-.case-track .hang > .seq, .case-track .hang-cell > .seq { width: auto; flex: 0 0 auto; margin: 0; }
-.hang--open { justify-content: center; }
-.hang--open > .seq  { height: 80%; }
-.hang--big  { justify-content: center; }
-.hang--big  > .seq  { height: 82%; }
-.hang--mid  { justify-content: center; }
-.hang--mid  > .seq  { height: 62%; }
-.hang--high { justify-content: flex-start; }
-.hang--high::before, .hang--low::after, .hang--pair::before, .hang--pair::after { content: ""; flex: 0 0 3%; }   /* spacers: % of the bay's height (padding % would follow its width) */
-.hang--high > .seq  { height: 54%; }
-.hang--low  { justify-content: flex-end; }
-.hang--low  > .seq  { height: 56%; }
-.hang--pair { justify-content: flex-start; }
-.hang--pair > .hang-cell:last-child { margin-top: auto; }       /* all the free height goes between the two, room for both labels */
-.hang-cell  { position: relative; height: 40%; display: flex; }
-.hang-cell > .seq { height: 100%; }
-.hang--pair > .hang-cell:last-child { align-self: flex-end; margin-left: clamp(2rem, 6vw, 6rem); }
-.hang--pair > .hang-cell:first-child { align-self: flex-start; }
+/* the hung wall: big · pair · low · high (set by ROT in site.js) */
+.hang { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.case-track .hang > .seq, .case-track .hang-cell > .seq { width: 100%; flex: 0 0 auto; }
+.hang--high { width: 82%; align-self: flex-start; }
+.hang--low  { width: 82%; align-self: flex-end; }
+.hang--pair { flex-direction: row; align-items: flex-start; gap: 4vw; }
+.hang-cell  { position: relative; width: 48%; display: flex; flex-direction: column; }
+.hang--pair > .hang-cell:last-child { margin-top: 3.2rem; }
 .hang-n {
-  position: absolute; left: 0; z-index: 1; white-space: nowrap; pointer-events: none;
-  font: 500 .66rem/1 var(--mono); letter-spacing: .12em; color: color-mix(in srgb, var(--ink) 55%, var(--muted));
+  order: 2; align-self: flex-start; margin-top: .55rem; z-index: 2; white-space: nowrap; pointer-events: none;
+  font: 500 .66rem/1 var(--mono); letter-spacing: .12em;
 }
 .hang-n i { font-style: normal; opacity: .55; }
-.hang--big > .hang-n, .hang--mid > .hang-n, .hang--open > .hang-n { bottom: calc(9% - 1.2rem); }
-.hang--big > .hang-n { bottom: calc(9% - 1.4rem); }
-.hang--mid > .hang-n { bottom: calc(19% - 1.4rem); }
-.hang--open > .hang-n { bottom: calc(10% - 1.4rem); }
-.hang--high > .hang-n { top: calc(3% + 54% + .7rem); }
-.hang--low > .hang-n  { top: calc(41% - 1.6rem); }
-.hang-cell > .hang-n  { top: auto; bottom: -1.3rem; }
-.hang--pair > .hang-cell:first-child > .hang-n { bottom: -1.3rem; }
-.hang--pair > .hang-cell:last-child > .hang-n { top: -1.3rem; bottom: auto; }
+.hang--low > .hang-n { align-self: flex-end; margin-left: 0; }
 
-/* 萬花筒 windows in the gaps -------------------------------------------
-   a round window in the empty part of a bay; a hairline in the project's
-   colour threads the wall together and drops into each window */
-.case-track > .case-body { position: relative; }
+/* wider screens: each piece is a slide about a screen tall */
+@media (min-width: 900px) {
+  .case-track { scroll-snap-type: y proximity; gap: 0; padding: 0 var(--pad) 3rem; }
+  .case-track > .case-head {
+    position: absolute; z-index: 3; left: var(--pad); top: calc(var(--slide) / 2); transform: translateY(-50%);
+    width: min(24rem, 28vw); padding: 1.6rem 1.4rem;
+  }
+  .case-track > .case-body { gap: 0; padding: 0 var(--pad); margin-inline: calc(var(--pad) * -1); }
+  /* tightened: pieces are shorter than a screen and left/right ones interleave, so a project is ~half as long */
+  .hang { justify-content: center; align-items: center; padding-block: 3.5vh; scroll-snap-align: center; }
+  .hang--open { min-height: var(--slide); }
+  /* every piece is sized from its own proportions (--ar), so nothing is taller than the screen */
+  .case-track .hang > .seq { width: min(100%, calc(60vh * var(--ar, 1))); }
+  .hang--open { align-items: flex-end; padding-right: 2%; }
+  .case-track .hang--open > .seq { width: min(56vw, calc(74vh * var(--ar, 1))); }
+  .case-track .hang--mid > .seq { width: min(100%, calc(50vh * var(--ar, 1))); }
+  .hang--high, .hang--low { width: auto; align-self: stretch; }
+  .hang--high { align-items: flex-start; padding-left: 5%; }
+  .hang--low  { align-items: flex-end; padding-right: 5%; }
+  .case-track .hang--high > .seq, .case-track .hang--low > .seq { width: min(44vw, calc(50vh * var(--ar, 1))); }
+  /* a right-hung piece after a left-hung one (or the reverse) rises beside it */
+  /* how far it rises is worked out in site.js (caseInterleave), so it never runs into the window or the image above */
+  .hang--pair { flex-direction: row; justify-content: center; align-items: center; gap: 5vw; }
+  .hang-cell { width: auto; align-items: flex-start; }
+  .case-track .hang-cell > .seq { width: min(32vw, calc(44vh * var(--ar, 1))); }
+  .hang--pair > .hang-cell:last-child { margin-top: 10vh; }
+  .hang--low > .hang-n { margin-left: -.45rem; }
+  .case-track > .case-foot { min-height: 60vh; justify-content: center; align-items: center; scroll-snap-align: center; background: none !important; }
+  .case-track > .case-foot { align-items: stretch; width: min(26rem, 40vw); margin-inline: auto; }
+  .case-track > .case-foot > * { background: color-mix(in srgb, var(--paper) 92%, transparent); }
+}
+
+/* 萬花筒 windows in the free side --------------------------------------
+   a round window beside a piece hung left or right; a hairline in the
+   project's colour runs down the middle of the wall */
 .case-track > .case-body::before {
-  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1.5px; pointer-events: none;
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1.5px; pointer-events: none;
   background: color-mix(in srgb, var(--accent) 85%, transparent);
 }
 .kwin-wrap {
-  position: absolute; right: 6%; height: 27%; aspect-ratio: 1; max-width: 80%; pointer-events: none;
+  position: absolute; top: 50%; width: 34vw; aspect-ratio: 1; margin-top: -17vw; pointer-events: none;
   border-radius: 50%; padding: 3px;
   box-shadow: 0 0 0 1px var(--accent), 0 0 0 .5rem color-mix(in srgb, var(--paper) 70%, transparent);
   transform: scale(calc(.94 + var(--dim-open, 0) * .1)); transition: transform .5s ease;
 }
 .kwin { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--paper-2); }
-.hang--low  > .kwin-wrap { top: 5%; }
-.hang--high > .kwin-wrap { bottom: 5%; }
-.kwin-wrap::after {                       /* the drop from window to thread */
-  content: ""; position: absolute; left: 50%; width: 1.5px; background: color-mix(in srgb, var(--accent) 85%, transparent);
+.hang--high > .kwin-wrap { left: calc(100% + 3vw); }
+.hang--low  > .kwin-wrap { right: calc(100% + 3vw); }
+@media (min-width: 900px) {
+  /* left and right pieces interleave, so each window sits in the corner its neighbour leaves free:
+     a right-hung piece's window top-left, a left-hung piece's window bottom-right */
+  .kwin-wrap { width: min(18vw, 30vh); margin-top: 0; }
+  .hang--low  > .kwin-wrap { top: 3vh; right: auto; left: 8%; }
+  .hang--high > .kwin-wrap { top: auto; bottom: 2vh; left: auto; right: 8%; }
 }
-.hang--low  > .kwin-wrap::after { top: 100%; height: 40%; }
-.hang--high > .kwin-wrap::after { bottom: 100%; height: 40%; }
-.hang-n { z-index: 2; }
 
 /* back to start — same spot wherever you are in a project */
 .case-top {
@@ -985,7 +979,6 @@ body > footer .text-link { justify-self: end; }
 }
 .case-top.is-on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .case-top i { font-style: normal; }
-.case-top .ct-y { display: none; }
 .case-top:hover { background: var(--paper); }
 .case-top:focus-visible { outline: 2px solid var(--seal); outline-offset: 3px; }
 .case-top-tip {
@@ -998,7 +991,7 @@ body > footer .text-link { justify-self: end; }
 .case-top:hover .case-top-tip, .case-top:focus-visible .case-top-tip { opacity: 1; }
 
 /* puzzles: same-shaped detail/product shots share one panel -------- */
-.case-track .seq--mosaic { display: grid; gap: 8px; width: auto; flex: 0 0 auto; }
+.case-track .seq--mosaic { display: grid; gap: 8px; }
 .seq--m2 { grid-template-columns: 1fr 1fr; }
 .seq--m3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
 .seq--m3 > .m-cell:first-child { grid-row: span 2; }
@@ -1008,7 +1001,7 @@ body > footer .text-link { justify-self: end; }
   position: relative; display: block; min-width: 0; min-height: 0;
   padding: 0; border: 0; overflow: clip; cursor: zoom-in; background: var(--paper-2);
 }
-.case-track .m-cell img { width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.case-track .m-cell img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; }
 .m-cell::after {
   content: "+"; position: absolute; right: .5rem; bottom: .5rem;
   width: 1.6rem; height: 1.6rem; display: grid; place-items: center;
@@ -1018,8 +1011,7 @@ body > footer .text-link { justify-self: end; }
 .m-cell:hover::after, .m-cell:focus-visible::after { opacity: 1; transform: none; }
 .m-cell:focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
 @media (max-width: 620px) {
-  .case-track .seq--mosaic { height: auto; width: 86vw; scroll-snap-align: center; gap: 5px; }
-  .case-track .m-cell img { height: 100%; max-height: none; }
+  .case-track .seq--mosaic { gap: 5px; }
   .m-cell::after { opacity: .85; transform: none; }       /* touch: show the hint */
 }
 /* swapping to the previous / next project: the strip dips and comes back */
@@ -1046,30 +1038,20 @@ body > footer .text-link { justify-self: end; }
 @keyframes zoom-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* layers inside a project ------------------------------------------ */
-/* 1. parallax: each image drifts inside its frame as the strip passes; the opening plate holds still */
+/* 1. parallax: each image drifts inside its frame as it passes, and each piece rises and settles as it comes up */
 .case-track .seq:not(.seq--opening), .case-track .pair-cell { overflow: clip; }   /* clip, not hidden: hidden would make each frame its own scroller and freeze the view() timelines */
 @supports (animation-timeline: view()) {
   .case-body .seq:not(.seq--opening) img {
-    animation: var(--wipe, seq-wipe-y) 1ms linear forwards, seq-drift 1ms linear both;
-    animation-timeline: view(inline), view(inline);
-    animation-range: entry 0% entry 45%, cover 0% cover 100%;
+    animation: var(--wipe, seq-wipe-y) 1ms linear forwards, seq-drift-y 1ms linear both;
+    animation-timeline: view(block), view(block);
+    animation-range: entry 0% entry 55%, cover 0% cover 100%;
   }
-  @keyframes seq-drift { from { transform: translateX(5%) scale(1.1); } to { transform: translateX(-5%) scale(1.1); } }
-}
-@supports (animation-timeline: view()) {
-  @media (max-width: 620px) {
-    .case-body .seq:not(.seq--opening) img {
-      animation: var(--wipe, seq-wipe-y) 1ms linear forwards, seq-drift-y 1ms linear both;
-      animation-timeline: view(block), view(block);
-      animation-range: entry 0% entry 55%, cover 0% cover 100%;
-    }
-    .case-body > .hang:not(.hang--open) {
-      animation: hang-rise 1ms linear both; animation-timeline: view(block); animation-range: entry 0% entry 70%;
-    }
-    .case-body > .hang--high { --hx: -6%; } .case-body > .hang--low { --hx: 6%; }
-    @keyframes hang-rise { from { opacity: .25; transform: translate3d(var(--hx, 0), 2.4rem, 0) scale(.94); } to { opacity: 1; transform: none; } }
-    @keyframes seq-drift-y { from { transform: translateY(5%) scale(1.1); } to { transform: translateY(-5%) scale(1.1); } }
+  .case-body > .hang:not(.hang--open) {
+    animation: hang-rise 1ms linear both; animation-timeline: view(block); animation-range: entry 0% entry 70%;
   }
+  .case-body > .hang--high { --hx: -6%; } .case-body > .hang--low { --hx: 6%; }
+  @keyframes hang-rise { from { opacity: .25; transform: translate3d(var(--hx, 0), 2.4rem, 0) scale(.94); } to { opacity: 1; transform: none; } }
+  @keyframes seq-drift-y { from { transform: translateY(5%) scale(1.1); } to { transform: translateY(-5%) scale(1.1); } }
 }
 /* 2. ghost title: the project's name, huge and outlined, sliding slower than the images */
 .case-ghost {
@@ -1102,40 +1084,9 @@ body > footer .text-link { justify-self: end; }
     animation-name: sheet-up;
   }
   @keyframes sheet-up { from { transform: translateY(100%); opacity: .4; } }
-  /* phones: the wall reads downwards — pieces hang left, right, full; pairs side by side, staggered */
-  .case-track > .case-body { overflow-x: clip; margin-inline: -5vw; padding-inline: 5vw; }      /* the half-moons are cut at the screen edge, never scrollable */
-  .case-track { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto;
-    overscroll-behavior-y: contain; gap: 2.4rem; padding: 1.4rem 5vw 2.5rem; scroll-snap-type: none; }
-  .case-track > .case-head { flex: 0 0 auto; max-height: none; overflow: visible; padding: 1.3rem 1.1rem; }
-  .case-track > .case-body { flex-direction: column; align-items: stretch; height: auto; gap: 2.6rem; }
-  .case-track > .case-foot { flex: 0 0 auto; }
-  .case-track::after { flex-basis: 1px; }
-  .hang { height: auto; padding: 0 !important; }
-  .hang::before, .hang::after { display: none; }
-  .case-track .hang > .seq, .case-track .hang-cell > .seq { height: auto !important; width: 100%; }
-  .case-track .seq img { width: 100%; height: auto; max-height: none; }
-  .case-track .seq--mosaic { height: auto; width: 100%; gap: 5px; }
-  .hang--high { width: 82%; align-self: flex-start; }
-  .hang--low  { width: 82%; align-self: flex-end; }
-  .hang--pair { flex-direction: row; align-items: flex-start; gap: 4vw; }
-  .hang-cell  { width: 48%; height: auto; flex-direction: column; }
-  .hang--pair > .hang-cell:last-child { margin: 3.2rem 0 0 !important; align-self: auto; }
-  .hang-n, .hang--big > .hang-n, .hang--mid > .hang-n, .hang--open > .hang-n, .hang--high > .hang-n, .hang--low > .hang-n,
-  .hang-cell > .hang-n, .hang--pair > .hang-cell:first-child > .hang-n, .hang--pair > .hang-cell:last-child > .hang-n {
-    position: static; order: 2; margin-top: .55rem; }
-  /* phones: the thread runs down the middle; windows peek in from the free edge as half-moons */
-  .case-track > .case-body::before { left: 50%; right: auto; top: 0; bottom: 0; width: 1.5px; height: auto; }
-  .kwin-wrap { height: auto; width: 34vw; max-width: none; top: 50% !important; bottom: auto !important; right: auto; margin-top: -17vw; }
-  .hang--high > .kwin-wrap { left: calc(100% + 3vw); }
-  .hang--low  > .kwin-wrap { right: calc(100% + 3vw); }
-  .kwin-wrap::after { display: none; }
   .case-top { left: auto; right: var(--pad); bottom: 1rem; }
-  .case-top .ct-x { display: none; } .case-top .ct-y { display: inline; }
   .case-top-tip { display: none; }
   .sheet-open .case-top { opacity: 0; visibility: hidden; }
-  .hang--low > .hang-n { text-align: right; align-self: flex-end; margin-left: 0; }
-  .case-track .hang-n { align-self: flex-start; }
-  .case-track .hang--low > .hang-n { align-self: flex-end; }
 }
 
 /* =================================================================

@@ -307,8 +307,7 @@ function buildSequence(p) {
    "full" shots stand alone — but the pieces are hung like a show rather
    than lined up: big in the middle, then two small stacked and staggered,
    then one hung low, one hung high. Each piece carries its image number.
-   Desktop reads it sideways; phones read it downwards, staggered left and
-   right. Puzzle cells crop to fill; tap to see the whole image. */
+   Every screen reads it downwards, pieces left, centre and right in turn. Puzzle cells crop to fill; tap to see the whole image. */
 function sequenceHTML(p) {
   const all = sheet(p.slug);
   const opening = all.find(x => x.n === p.cover);
@@ -318,13 +317,13 @@ function sequenceHTML(p) {
   const alt = () => `${p.title} — case study image ${++n}`;
   const fam = x => { const k = classify(x.r); return k === "full" ? "full" : k === "wide" ? "land" : "port"; };
   const single = it => ({ kind: classify(it.r), nums: [it.n],
-    html: `<figure class="seq seq--${classify(it.r)}">${imgTag(p.slug, it, alt(), n === 0)}</figure>` });
+    html: `<figure class="seq seq--${classify(it.r)}" style="--ar:${it.r.toFixed(3)}">${imgTag(p.slug, it, alt(), n === 0)}</figure>` });
   const mosaic = (items, land) => {
     const r = items.reduce((s, x) => s + x.r, 0) / items.length;
     const stack = land && items.length === 2;                  /* landscape pair: one above the other */
     const ratio = items.length === 4 ? r : items.length === 3 ? r * 1.5 : stack ? r / 2 : r * 2;
     return { kind: "mosaic", nums: items.map(x => x.n),
-      html: `<div class="seq seq--mosaic seq--m${items.length}${stack ? "v" : ""}" style="aspect-ratio:${ratio.toFixed(3)}">${items.map(it =>
+      html: `<div class="seq seq--mosaic seq--m${items.length}${stack ? "v" : ""}" style="aspect-ratio:${ratio.toFixed(3)};--ar:${ratio.toFixed(3)}">${items.map(it =>
       `<button class="m-cell" type="button" data-zoom="${src(p.slug, it.n)}" aria-label="${esc("View larger 放大檢視")}">${imgTag(p.slug, it, alt(), false)}</button>`).join("")}</div>` };
   };
   const groupRun = (run, land) => {
@@ -375,7 +374,7 @@ function sequenceHTML(p) {
     }
     r++;
   }
-  return `<div class="hang hang--open"><figure class="seq seq--opening">${imgTag(p.slug, opening, `${p.title} — title plate`, true)}</figure></div>`
+  return `<div class="hang hang--open"><figure class="seq seq--opening" style="--ar:${opening.r.toFixed(3)}">${imgTag(p.slug, opening, `${p.title} — title plate`, true)}</figure></div>`
        + out.join("");
 }
 
@@ -421,7 +420,7 @@ function showProject(p) {
   document.body.classList.add("dialog-open");
   if (!dialog.open) dialog.showModal();
   dialog.scrollTop = 0;
-  const tr = $("#case-track"); if (tr) trackHome(tr);
+  const tr = $("#case-track"); if (tr) tr.scrollTop = 0;
   const gh = $("#case-ghost"); if (gh) gh.textContent = p.title;
   dialog.dispatchEvent(new Event("case:open"));
 }
@@ -455,7 +454,7 @@ function openProject(slug, trigger) {
  * CASE DIMENSION — opening a project steps inside its kaleidoscope.
  * Two layers made from the project's own cover: a far one, large and
  * slow, and a near one — a smaller inner ring turning the other way,
- * faster. Both follow the strip: they turn with scrollLeft, open up
+ * faster. Both follow the strip: they turn with the scroll, open up
  * (brighter, wider) in the gap between two panels and settle back when
  * a panel is centred, and carry the project's accent, strongest while a
  * panel is in focus. Drawn only when the strip moves — nothing runs
@@ -463,17 +462,47 @@ function openProject(slug, trigger) {
  * Off under reduced motion.
  * ------------------------------------------------------------------ */
 const caseDim = { img: null, slug: null, raf: 0, centres: [], cost: 0, frames: 0, near: true, open: 0 };
+/* wider screens: a left-hung piece after a right-hung one rises beside it, as far as the free
+   space allows (never into the window or the image above it), so a project is shorter */
+function caseInterleave() {
+  const tr = $("#case-track"); if (!tr) return;
+  const wide = matchMedia("(min-width: 900px)").matches;
+  $$(".case-body > .hang--high", tr).forEach(h => {
+    h.style.marginTop = "";
+    const low = h.previousElementSibling;
+    if (!wide || !low || !low.classList.contains("hang--low")) return;
+    const lb = low.getBoundingClientRect(), pad = parseFloat(getComputedStyle(h).paddingTop) || 0;
+    const hs = h.querySelector(":scope > .seq"), ls = low.querySelector(":scope > .seq");
+    if (!hs || !ls) return;
+    const hr = hs.getBoundingClientRect(), lr = ls.getBoundingClientRect();
+    let free = innerHeight * .3;
+    const xHit = (a, b) => a.left < b.right - 4 && a.right > b.left + 4;
+    if (xHit(hr, lr)) free = Math.min(free, lb.bottom - lr.bottom - 40);
+    const w = low.querySelector(".kwin-wrap");
+    if (w) { const wr = w.getBoundingClientRect(); if (xHit(hr, wr)) free = Math.min(free, lb.bottom - wr.bottom - 28 - pad); }
+    if (free <= 24) return;
+    h.style.marginTop = (-free).toFixed(0) + "px";
+    /* this piece's own window (bottom-right) must clear the piece above and its label */
+    const hw = h.querySelector(".kwin-wrap");
+    if (hw) {
+      const wr = hw.getBoundingClientRect();
+      const above = [lr, ...$$(":scope > .hang-n", low).map(l => l.getBoundingClientRect())].filter(r => xHit(wr, r));
+      const clash = Math.max(0, ...above.map(r => r.bottom + 16 - wr.top));
+      if (clash > 0) { const f = free - clash; h.style.marginTop = f > 24 ? (-f).toFixed(0) + "px" : ""; }
+    }
+  });
+}
 function caseDimMeasure() {
   const tr = $("#case-track"); if (!tr) return;
-  const v = caseVert(), tb = tr.getBoundingClientRect(), base = v ? tr.scrollTop - tb.top : tr.scrollLeft - tb.left;
+  const tb = tr.getBoundingClientRect(), base = tr.scrollTop - tb.top;
   caseDim.centres = $$(".case-head, .case-body > *, .case-foot", tr)
     .map(el => el.getBoundingClientRect()).filter(r => r.width > 0)
-    .map(r => v ? { c: base + r.top + r.height / 2, half: r.height / 2 } : { c: base + r.left + r.width / 2, half: r.width / 2 });
+    .map(r => ({ c: base + r.top + r.height / 2, half: r.height / 2 }));
 }
 /* 0 while a panel sits in the middle of the view, 1 in the gap between two */
 function caseDimOpenness(tr) {
   if (!caseDim.centres.length) return 0;
-  const mid = trackPos(tr) + (caseVert() ? tr.clientHeight : tr.clientWidth) / 2;
+  const mid = tr.scrollTop + tr.clientHeight / 2;
   let best = Infinity, half = 1;
   for (const p of caseDim.centres) { const d = Math.abs(p.c - mid); if (d < best) { best = d; half = p.half; } }
   const k = Math.max(0, Math.min(1, best / Math.max(1, half)));
@@ -506,7 +535,7 @@ function caseDimDraw() {
   if (prefersReduced()) { caseWinDraw(0, true); return; }
   const t0 = performance.now();
   const tr = $("#case-track");
-  const st = tr ? trackPos(tr) : dialog.scrollTop;
+  const st = tr ? tr.scrollTop : dialog.scrollTop;
   const max = tr ? trackMax(tr) : Math.max(1, dialog.scrollHeight - dialog.clientHeight);
   const idx = PROJECTS.findIndex(x => x.slug === caseDim.slug);
   const open = tr ? caseDimOpenness(tr) : 0;
@@ -557,8 +586,8 @@ function caseDimSet(p) {
     cv.classList.add("is-on"); if (near && caseDim.near) near.classList.add("is-on");
   }, () => {});
 }
-dialog.addEventListener("case:open", () => { caseDimMeasure(); setTimeout(caseDimMeasure, 700); });
-addEventListener("resize", () => { if (dialog.open) { caseDimMeasure(); caseDimSchedule(); } });
+dialog.addEventListener("case:open", () => { caseInterleave(); caseDimMeasure(); setTimeout(() => { caseInterleave(); caseDimMeasure(); }, 700); });
+addEventListener("resize", () => { if (dialog.open) { caseInterleave(); caseDimMeasure(); caseDimSchedule(); } });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && dialog.open) caseDimSchedule(); });
 dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
 
@@ -597,64 +626,52 @@ dialog.addEventListener("scroll", caseDimSchedule, { passive: true });
 })();
 
 /* ------------------------------------------------------------------ *
- * HORIZONTAL CASE — a vertical wheel moves the track sideways; arrow,
+ * THE CASE STRIP — a project reads downwards, one piece per slide; arrow,
  * page and space keys step through it. Trackpads and touch keep their
  * own sideways scroll. The head panel scrolls itself when it overflows.
  * ------------------------------------------------------------------ */
-/* phones read a project downwards, everything wider reads it across */
-const caseVert = () => matchMedia("(max-width: 620px)").matches;
-const trackPos = tr => caseVert() ? tr.scrollTop : tr.scrollLeft;
-const trackMax = tr => Math.max(1, caseVert() ? tr.scrollHeight - tr.clientHeight : tr.scrollWidth - tr.clientWidth);
-const trackHome = tr => { tr.scrollLeft = 0; tr.scrollTop = 0; };
+/* a project reads downwards on every screen, slide by slide */
+const trackMax = tr => Math.max(1, tr.scrollHeight - tr.clientHeight);
 (() => {
   const track = $("#case-track"); if (!track) return;
   track.addEventListener("scroll", caseDimSchedule, { passive: true });
   /* ghost title slides at a quarter of the strip's speed; progress rule fills */
   const ghost = $("#case-ghost"), prog = $("#case-progress"), toTop = $("#case-top");
   if (toTop) toTop.addEventListener("click", () => {
-    track.scrollTo({ left: 0, top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
+    track.scrollTo({ top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
     try { dTitle.focus({ preventScroll: true }); } catch (_) {}
   });
   let tick = false;
   const layers = () => {
     tick = false;
-    const max = trackMax(track), x = trackPos(track);
-    /* across: the name slides at a quarter speed. Down (phones): it drifts sideways as you read on */
-    const k = caseVert() ? .12 : .25;
+    const max = trackMax(track), x = track.scrollTop;
+    /* the name drifts sideways, slowly, as you read down */
+    const k = .12;
     if (ghost && !prefersReduced()) ghost.style.transform = `translate3d(${(-x * k + innerWidth * .04).toFixed(1)}px,0,0)`;
     if (prog) prog.style.transform = `scaleX(${(x / max).toFixed(4)})`;
-    if (toTop) toTop.classList.toggle("is-on", x > (caseVert() ? track.clientHeight : track.clientWidth) * .5);
+    if (toTop) toTop.classList.toggle("is-on", x > track.clientHeight * .5);
   };
   track.addEventListener("scroll", () => { if (!tick) { tick = true; requestAnimationFrame(layers); } }, { passive: true });
   dialog.addEventListener("case:open", layers);
-  track.addEventListener("wheel", e => {
-    if (caseVert()) return;                                           /* reading downwards: native */
-    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;            /* sideways gesture: native */
-    const head = e.target.closest(".case-head");
-    if (head && head.scrollHeight > head.clientHeight + 2) {          /* long text in the head panel */
-      const atTop = head.scrollTop <= 0, atEnd = head.scrollTop + head.clientHeight >= head.scrollHeight - 1;
-      if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return;
-    }
-    const k = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? track.clientWidth : 1;
-    track.scrollLeft += e.deltaY * k;
-    e.preventDefault();
-  }, { passive: false });
   dialog.addEventListener("keydown", e => {
     if (!dialog.open || e.altKey || e.ctrlKey || e.metaKey) return;
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "]" || (e.shiftKey && e.key === "ArrowRight")) { swapProject(1); e.preventDefault(); return; }
     if (e.key === "[" || (e.shiftKey && e.key === "ArrowLeft"))  { swapProject(-1); e.preventDefault(); return; }
-    const vert = caseVert();
-    const step = (vert ? track.clientHeight : track.clientWidth) * .8, smooth = prefersReduced() ? "auto" : "smooth";
-    const native = e.target === track && (vert ? (e.key === "ArrowUp" || e.key === "ArrowDown") : (e.key === "ArrowLeft" || e.key === "ArrowRight"));
-    let dx = null;
-    if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown" || (e.key === " " && tag !== "BUTTON")) dx = step;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") dx = -step;
-    else if (e.key === "Home") { track.scrollTo({ left: 0, top: 0, behavior: smooth }); e.preventDefault(); return; }
-    else if (e.key === "End") { track.scrollTo({ left: track.scrollWidth, top: track.scrollHeight, behavior: smooth }); e.preventDefault(); return; }
-    if (dx === null || native) return;
-    track.scrollBy(vert ? { top: dx, behavior: smooth } : { left: dx, behavior: smooth });
+    const smooth = prefersReduced() ? "auto" : "smooth";
+    /* ↑ ↓, Page keys and Space go slide by slide */
+    let dir = 0;
+    if (e.key === "ArrowDown" || e.key === "PageDown" || (e.key === " " && !e.shiftKey && tag !== "BUTTON")) dir = 1;
+    else if (e.key === "ArrowUp" || e.key === "PageUp" || (e.key === " " && e.shiftKey && tag !== "BUTTON")) dir = -1;
+    else if (e.key === "Home") { track.scrollTo({ top: 0, behavior: smooth }); e.preventDefault(); return; }
+    else if (e.key === "End") { track.scrollTo({ top: track.scrollHeight, behavior: smooth }); e.preventDefault(); return; }
+    if (!dir) return;
+    const tb = track.getBoundingClientRect(), mid = tb.top + tb.height / 2;
+    const cs = $$(".case-body > .hang, .case-foot", track).map(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; });
+    const next = dir > 0 ? cs.find(c => c > mid + 12) : cs.reverse().find(c => c < mid - 12);
+    if (next === undefined) track.scrollTo({ top: dir > 0 ? track.scrollHeight : 0, behavior: smooth });
+    else track.scrollBy({ top: next - mid, behavior: smooth });
     e.preventDefault();
   });
 })();
@@ -670,7 +687,7 @@ function neighbourProject(dir) {
 function swapProject(dir) {
   const p = neighbourProject(dir); if (!p) return;
   const track = $("#case-track");
-  const go = () => { showProject(p); if (track) trackHome(track); };
+  const go = () => { showProject(p); if (track) track.scrollTop = 0; };
   if (prefersReduced() || !track) { go(); return; }
   track.classList.add("is-swapping");
   requestAnimationFrame(() => { go(); requestAnimationFrame(() => track.classList.remove("is-swapping")); });
@@ -681,13 +698,13 @@ $("#case-next").addEventListener("click", () => swapProject(1));
 (() => {
   const track = $("#case-track"); if (!track) return;
   let ts = null;
-  const at = t => caseVert() ? t.clientY : t.clientX;
+  const at = t => t.clientY;
   track.addEventListener("touchstart", e => { ts = { x: at(e.touches[0]), fired: false }; }, { passive: true });
   track.addEventListener("touchmove", e => {
     if (!ts || ts.fired) return;
     const x = at(e.touches[0]);
     /* "at the end" has some tolerance: snap and rubber-banding stop a little short */
-    const atEnd = trackPos(track) >= trackMax(track) - 48;
+    const atEnd = track.scrollTop >= trackMax(track) - 48;
     if (!atEnd) { ts.x = x; return; }
     if (ts.x - x > 90) { ts.fired = true; swapProject(1); }
   }, { passive: true });
