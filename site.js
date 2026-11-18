@@ -466,7 +466,7 @@ const caseDim = { img: null, slug: null, raf: 0, centres: [], cost: 0, frames: 0
    space allows (never into the window or the image above it), so a project is shorter */
 function caseInterleave() {
   const tr = $("#case-track"); if (!tr) return;
-  const wide = matchMedia("(min-width: 900px)").matches;
+  const wide = false;   /* pieces are full slides now: nothing rises beside its neighbour */
   $$(".case-body > .hang--high", tr).forEach(h => {
     h.style.marginTop = "";
     const low = h.previousElementSibling;
